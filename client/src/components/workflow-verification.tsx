@@ -134,12 +134,13 @@ export function WorkflowVerification({ onVerificationComplete, onSetupRequired }
                         className="flex items-center"
                       >
                         <Github className="w-4 h-4 mr-2" />
-                        Verify Deployment Status
+                        Verify Setups
                         <ExternalLink className="w-4 h-4 ml-2" />
                       </a>
                     </Button>
                     <Button
                       variant="outline"
+                      size="sm"
                       onClick={() => {
                         setHasVerifiedManually(true);
                         toast({
