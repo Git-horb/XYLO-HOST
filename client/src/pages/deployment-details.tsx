@@ -21,7 +21,8 @@ import {
   Activity,
   Wifi,
   WifiOff,
-  Github
+  Github,
+  Zap
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import type { Deployment, DeploymentLog } from '@shared/schema';
@@ -42,26 +43,26 @@ const getStatusIcon = (status: string) => {
 const getStatusColor = (status: string) => {
   switch (status) {
     case 'success':
-      return 'bg-green-100 text-green-800 border-green-200';
+      return 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-green-200 dark:border-green-700';
     case 'failed':
-      return 'bg-red-100 text-red-800 border-red-200';
+      return 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 border-red-200 dark:border-red-700';
     case 'running':
-      return 'bg-blue-100 text-blue-800 border-blue-200';
+      return 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-700';
     default:
-      return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border-yellow-200 dark:border-yellow-700';
   }
 };
 
 const getLogStatusColor = (status: string) => {
   switch (status) {
     case 'success':
-      return 'text-green-600';
+      return 'text-green-600 dark:text-green-400';
     case 'failed':
-      return 'text-red-600';
+      return 'text-red-600 dark:text-red-400';
     case 'running':
-      return 'text-blue-600';
+      return 'text-blue-600 dark:text-blue-400';
     default:
-      return 'text-yellow-600';
+      return 'text-yellow-600 dark:text-yellow-400';
   }
 };
 
@@ -149,8 +150,8 @@ export default function DeploymentDetails() {
 
   if (deploymentLoading) {
     return (
-      <div className="min-h-screen bg-background">
-        <div className="max-w-6xl mx-auto px-4 py-8">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-white dark:from-slate-900 dark:to-slate-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex items-center space-x-4 mb-8">
             <Skeleton className="h-10 w-10 rounded-lg" />
             <div className="space-y-2">
@@ -192,15 +193,22 @@ export default function DeploymentDetails() {
 
   if (!deployment) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Card>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-white dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
+        <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border border-slate-200/50 dark:border-slate-700/50 shadow-xl">
           <CardContent className="p-12 text-center">
-            <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Deployment Not Found</h3>
-            <p className="text-muted-foreground mb-6">
+            <div className="w-20 h-20 bg-gradient-to-br from-red-500 to-red-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg ring-4 ring-red-100 dark:ring-red-900/30">
+              <XCircle className="w-10 h-10 text-white" />
+            </div>
+            <h3 className="text-2xl font-bold mb-3 text-slate-900 dark:text-white">Deployment Not Found</h3>
+            <p className="text-slate-600 dark:text-slate-400 mb-8 leading-relaxed max-w-md mx-auto">
               The deployment you're looking for doesn't exist or you don't have permission to view it.
             </p>
-            <Button onClick={() => setLocation('/deployments')}>
+            <Button 
+              onClick={() => setLocation('/deployments')}
+              size="lg"
+              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg hover:shadow-xl transition-all duration-200"
+            >
+              <ArrowLeft className="w-5 h-5 mr-2" />
               Back to Deployments
             </Button>
           </CardContent>
@@ -210,66 +218,85 @@ export default function DeploymentDetails() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="border-b border-border bg-card">
-        <div className="max-w-6xl mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-white dark:from-slate-900 dark:to-slate-800">
+      {/* Modern Navigation Header */}
+      <nav className="backdrop-blur-md bg-white/80 dark:bg-slate-900/80 border-b border-slate-200/50 dark:border-slate-700/50 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center space-x-3">
+              <div className="w-9 h-9 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+                <Zap className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent">XYLO-MD</h1>
+                <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">Deployment Platform</p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-3">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setLocation('/deployments')}
-                className="p-2"
+                className="hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                 data-testid="button-back-deployments"
               >
-                <ArrowLeft className="w-4 h-4" />
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Deployments
               </Button>
-              <div>
-                <div className="flex items-center space-x-3 mb-1">
-                  {getStatusIcon(deployment.status)}
-                  <h1 className="text-2xl font-bold">
-                    {deployment.branchName || 'Unnamed Deployment'}
-                  </h1>
-                  <Badge
-                    variant="outline"
-                    className={getStatusColor(deployment.status)}
-                  >
-                    {deployment.status}
-                  </Badge>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Deployment details and live logs
-                </p>
-              </div>
-            </div>
-            
-            {deployment.workflowUrl && (
-              <Button
-                variant="outline"
-                asChild
-                data-testid="button-view-workflow"
-              >
-                <a
-                  href={deployment.workflowUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center"
+              {deployment?.workflowUrl && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  asChild
+                  data-testid="button-view-workflow"
                 >
-                  <ExternalLink className="w-4 h-4 mr-2" />
-                  View Workflow
-                </a>
-              </Button>
-            )}
+                  <a
+                    href={deployment.workflowUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center"
+                  >
+                    <ExternalLink className="w-4 h-4 mr-2" />
+                    Workflow
+                  </a>
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </nav>
+      
+      {/* Header Section */}
+      <div className="relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 via-purple-600/10 to-pink-600/10 dark:from-blue-600/20 dark:via-purple-600/20 dark:to-pink-600/20"></div>
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="text-center">
+            <div className="flex items-center justify-center space-x-3 mb-6">
+              {getStatusIcon(deployment.status)}
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight">
+                <span className="bg-gradient-to-r from-slate-900 via-blue-900 to-purple-900 dark:from-white dark:via-blue-100 dark:to-purple-100 bg-clip-text text-transparent">
+                  {deployment.branchName || 'Unnamed Deployment'}
+                </span>
+              </h1>
+              <Badge
+                variant="outline"
+                className={`text-lg px-4 py-2 ${getStatusColor(deployment.status)}`}
+              >
+                {deployment.status}
+              </Badge>
+            </div>
+            <p className="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto leading-relaxed">
+              Real-time deployment monitoring with detailed logs and status updates for your XYLO-MD WhatsApp bot.
+            </p>
           </div>
         </div>
       </div>
-
-      <div className="max-w-6xl mx-auto px-4 py-8">
+      
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Main Content - Logs */}
           <div className="lg:col-span-2 space-y-6">
-            <Card>
+            <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border border-slate-200/50 dark:border-slate-700/50 shadow-xl">
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
@@ -344,7 +371,7 @@ export default function DeploymentDetails() {
 
           {/* Sidebar - Deployment Info */}
           <div className="space-y-6">
-            <Card>
+            <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border border-slate-200/50 dark:border-slate-700/50 shadow-xl">
               <CardHeader>
                 <CardTitle>Deployment Info</CardTitle>
               </CardHeader>
@@ -431,7 +458,7 @@ export default function DeploymentDetails() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border border-slate-200/50 dark:border-slate-700/50 shadow-xl">
               <CardHeader>
                 <CardTitle>Quick Actions</CardTitle>
               </CardHeader>
