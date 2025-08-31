@@ -209,7 +209,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID || process.env.VITE_GITHUB_CLIENT_ID;
   const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET || process.env.VITE_GITHUB_CLIENT_SECRET;
-  const REPO_OWNER = process.env.REPO_OWNER || 'XYLO-MD';
+  const REPO_OWNER = process.env.REPO_OWNER || 'DAV-EX';
   const REPO_NAME = process.env.REPO_NAME || 'XYLO-MD';
   const MAIN_BRANCH = process.env.MAIN_BRANCH || 'main';
   const WORKFLOW_FILE = process.env.WORKFLOW_FILE || 'deploy.yml';
