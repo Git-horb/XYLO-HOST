@@ -343,6 +343,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // Repository setup endpoint (fork creation)
+  app.post('/api/setup', async (req: Request, res: Response) => {
+    try {
+      const token = req.session.githubToken;
+      const username = req.session.githubUsername;
+
+      if (!token || !username) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+
+      // Check if fork already exists
+      let fork = null;
+      try {
+        fork = await makeGitHubRequest('GET', `repos/${username}/${REPO_NAME}`, null, token);
+        if (fork.fork && fork.parent.full_name === `${REPO_OWNER}/${REPO_NAME}`) {
+          return res.json({ 
+            success: true, 
+            message: 'Repository already exists and ready.',
+            alreadyExists: true
+          });
+        }
+      } catch (error) {
+        // Fork doesn't exist, proceed with creation
+      }
+
+      // Create fork
+      fork = await makeGitHubRequest('POST', `repos/${REPO_OWNER}/${REPO_NAME}/forks`, {}, token);
+      
+      // Wait a moment for fork to be ready
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      res.json({ 
+        success: true, 
+        message: 'Repository setup completed successfully.',
+        forkUrl: fork.html_url,
+        alreadyExists: false
+      });
+    } catch (error: any) {
+      console.error('Setup error:', error);
+      res.status(500).json({ 
+        error: error.message || 'Setup failed. Please try again.' 
+      });
+    }
+  });
+
   // Workflow verification endpoint
   app.get('/api/workflows/verify', async (req: Request, res: Response) => {
     try {

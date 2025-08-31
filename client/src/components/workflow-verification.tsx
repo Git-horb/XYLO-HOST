@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle, XCircle, AlertCircle, ExternalLink, RefreshCw, Github } from 'lucide-react';
+import { CheckCircle, XCircle, AlertCircle, ExternalLink, RefreshCw, Server, Settings } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface WorkflowStatus {
@@ -16,9 +16,10 @@ interface WorkflowStatus {
 
 interface WorkflowVerificationProps {
   onVerificationComplete: (verified: boolean) => void;
+  onSetupRequired: (setupNeeded: boolean) => void;
 }
 
-export function WorkflowVerification({ onVerificationComplete }: WorkflowVerificationProps) {
+export function WorkflowVerification({ onVerificationComplete, onSetupRequired }: WorkflowVerificationProps) {
   const [isManuallyVerified, setIsManuallyVerified] = useState(false);
   const { toast } = useToast();
 
@@ -30,15 +31,17 @@ export function WorkflowVerification({ onVerificationComplete }: WorkflowVerific
 
   // Notify parent component when verification status changes
   useEffect(() => {
-    const isVerified = workflowStatus?.workflowsEnabled || workflowStatus?.needsFork || isManuallyVerified;
+    const isVerified = workflowStatus?.workflowsEnabled || isManuallyVerified;
+    const needsSetup = workflowStatus?.needsFork;
     onVerificationComplete(!!isVerified);
-  }, [workflowStatus, isManuallyVerified, onVerificationComplete]);
+    onSetupRequired(!!needsSetup);
+  }, [workflowStatus, isManuallyVerified, onVerificationComplete, onSetupRequired]);
 
   const handleManualVerification = () => {
     setIsManuallyVerified(true);
     toast({
-      title: "Verification Confirmed",
-      description: "Proceeding with deployment setup.",
+      title: "Server Verification Complete",
+      description: "XYLO servers are ready for deployment.",
     });
   };
 
@@ -54,9 +57,9 @@ export function WorkflowVerification({ onVerificationComplete }: WorkflowVerific
           <div className="flex items-center space-x-3">
             <RefreshCw className="w-5 h-5 animate-spin text-blue-500" />
             <div>
-              <h3 className="font-semibold text-slate-900 dark:text-white">Checking Workflow Status</h3>
+              <h3 className="font-semibold text-slate-900 dark:text-white">Checking Server Status</h3>
               <p className="text-sm text-slate-600 dark:text-slate-400">
-                Verifying your GitHub repository and workflow configuration...
+                Verifying XYLO server availability and configuration...
               </p>
             </div>
           </div>
@@ -72,9 +75,9 @@ export function WorkflowVerification({ onVerificationComplete }: WorkflowVerific
           <div className="flex items-center space-x-3">
             <XCircle className="w-5 h-5 text-red-500" />
             <div>
-              <h3 className="font-semibold text-slate-900 dark:text-white">Verification Failed</h3>
+              <h3 className="font-semibold text-slate-900 dark:text-white">Server Check Failed</h3>
               <p className="text-sm text-slate-600 dark:text-slate-400">
-                Unable to check workflow status. Please try again.
+                Unable to connect to XYLO servers. Please try again.
               </p>
             </div>
           </div>
@@ -83,8 +86,8 @@ export function WorkflowVerification({ onVerificationComplete }: WorkflowVerific
     );
   }
 
-  // If workflows are enabled or fork is needed (will be created), show success
-  if (workflowStatus.workflowsEnabled || workflowStatus.needsFork) {
+  // If servers are ready, show success
+  if (workflowStatus.workflowsEnabled) {
     return (
       <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border border-slate-200/50 dark:border-slate-700/50 shadow-xl">
         <CardContent className="p-6">
@@ -92,14 +95,14 @@ export function WorkflowVerification({ onVerificationComplete }: WorkflowVerific
             <div className="flex items-center space-x-3">
               <CheckCircle className="w-5 h-5 text-green-500" />
               <div>
-                <h3 className="font-semibold text-slate-900 dark:text-white">Workflow Verification</h3>
+                <h3 className="font-semibold text-slate-900 dark:text-white">XYLO Servers Ready</h3>
                 <p className="text-sm text-slate-600 dark:text-slate-400">
-                  {workflowStatus.message}
+                  All systems operational. Ready for deployment.
                 </p>
               </div>
             </div>
             <Badge className="bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-green-200 dark:border-green-700">
-              Ready
+              Online
             </Badge>
           </div>
         </CardContent>
@@ -107,7 +110,12 @@ export function WorkflowVerification({ onVerificationComplete }: WorkflowVerific
     );
   }
 
-  // If workflows are disabled, show enable step
+  // If setup is needed, don't show verification - let parent handle setup flow
+  if (workflowStatus.needsFork) {
+    return null; // Parent will show setup button instead
+  }
+
+  // If servers need setup, show verification step
   if (workflowStatus.hasFork && !workflowStatus.workflowsEnabled && !isManuallyVerified) {
     return (
       <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border border-slate-200/50 dark:border-slate-700/50 shadow-xl">
@@ -116,20 +124,20 @@ export function WorkflowVerification({ onVerificationComplete }: WorkflowVerific
             <div className="flex items-center space-x-3">
               <AlertCircle className="w-5 h-5 text-orange-500" />
               <div>
-                <h3 className="font-semibold text-slate-900 dark:text-white">Enable GitHub Workflows</h3>
+                <h3 className="font-semibold text-slate-900 dark:text-white">Activate XYLO Servers</h3>
                 <p className="text-sm text-slate-600 dark:text-slate-400">
-                  {workflowStatus.message}
+                  Server activation required for your bot instance.
                 </p>
               </div>
             </div>
             
             <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4 space-y-3">
-              <h4 className="font-medium text-slate-900 dark:text-white text-sm">Required Action:</h4>
+              <h4 className="font-medium text-slate-900 dark:text-white text-sm">Activation Steps:</h4>
               <ol className="text-sm text-slate-600 dark:text-slate-400 space-y-1 list-decimal list-inside">
-                <li>Click the button below to open your repository's Actions page</li>
-                <li>Look for the green button that says "I understand my workflows, go ahead and enable them"</li>
-                <li>Click that button to enable workflows</li>
-                <li>Return here and click "I've enabled workflows" to continue</li>
+                <li>Click the server activation button below</li>
+                <li>Authorize XYLO to activate deployment servers</li>
+                <li>Return here and confirm activation is complete</li>
+                <li>Your bot will be ready for deployment</li>
               </ol>
             </div>
 
@@ -138,7 +146,7 @@ export function WorkflowVerification({ onVerificationComplete }: WorkflowVerific
                 <Button
                   asChild
                   className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white"
-                  data-testid="button-enable-workflows"
+                  data-testid="button-enable-servers"
                 >
                   <a
                     href={workflowStatus.enableUrl}
@@ -146,8 +154,8 @@ export function WorkflowVerification({ onVerificationComplete }: WorkflowVerific
                     rel="noopener noreferrer"
                     className="flex items-center"
                   >
-                    <Github className="w-4 h-4 mr-2" />
-                    Enable Workflows on GitHub
+                    <Server className="w-4 h-4 mr-2" />
+                    Activate XYLO Servers
                     <ExternalLink className="w-4 h-4 ml-2" />
                   </a>
                 </Button>
@@ -158,7 +166,7 @@ export function WorkflowVerification({ onVerificationComplete }: WorkflowVerific
                 onClick={handleManualVerification}
                 data-testid="button-manual-verification"
               >
-                I've enabled workflows
+                Servers Activated
               </Button>
               
               <Button
@@ -168,7 +176,7 @@ export function WorkflowVerification({ onVerificationComplete }: WorkflowVerific
                 data-testid="button-check-again"
               >
                 <RefreshCw className="w-4 h-4 mr-2" />
-                Check Again
+                Check Status
               </Button>
             </div>
           </div>
@@ -186,14 +194,14 @@ export function WorkflowVerification({ onVerificationComplete }: WorkflowVerific
             <div className="flex items-center space-x-3">
               <CheckCircle className="w-5 h-5 text-green-500" />
               <div>
-                <h3 className="font-semibold text-slate-900 dark:text-white">Workflows Verified</h3>
+                <h3 className="font-semibold text-slate-900 dark:text-white">Servers Activated</h3>
                 <p className="text-sm text-slate-600 dark:text-slate-400">
-                  Great! Your workflows should now be enabled and ready for deployment.
+                  Perfect! XYLO servers are now active and ready for deployment.
                 </p>
               </div>
             </div>
             <Badge className="bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-green-200 dark:border-green-700">
-              Verified
+              Active
             </Badge>
           </div>
         </CardContent>

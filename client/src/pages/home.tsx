@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { API_BASE_URL } from '@/lib/config';
-import { Github, Zap, Shield, Heart, BarChart3, CheckCircle, XCircle, Info } from 'lucide-react';
+import { Github, Zap, Shield, Heart, BarChart3, CheckCircle, XCircle, Info, Settings } from 'lucide-react';
 import { WorkflowVerification } from '@/components/workflow-verification';
 
 interface AuthStatus {
@@ -30,6 +30,8 @@ export default function Home() {
   const [branchName, setBranchName] = useState('');
   const [showDeployment, setShowDeployment] = useState(false);
   const [workflowVerified, setWorkflowVerified] = useState(false);
+  const [setupRequired, setSetupRequired] = useState(false);
+  const [setupCompleted, setSetupCompleted] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -69,6 +71,33 @@ export default function Home() {
       setShowDeployment(true);
     }
   }, [authStatus]);
+
+  // Setup mutation
+  const setupMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest('POST', `${API_BASE_URL}/setup`, {});
+      return response.json() as Promise<{ success: boolean; message: string; alreadyExists: boolean }>;
+    },
+    onSuccess: (data) => {
+      if (data.success) {
+        setSetupCompleted(true);
+        setSetupRequired(false);
+        toast({
+          title: "Repository Setup Complete",
+          description: data.alreadyExists ? "Using existing repository." : "Repository fork created successfully.",
+        });
+        // Refetch workflow status
+        queryClient.invalidateQueries({ queryKey: ['/api/workflows/verify'] });
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Setup Failed",
+        description: error.message || "Failed to setup repository",
+        variant: "destructive",
+      });
+    },
+  });
 
   // Deploy mutation
   const deployMutation = useMutation({
@@ -261,11 +290,50 @@ export default function Home() {
                       </div>
                     </div>
 
-                    {/* Workflow Verification Step */}
-                    <div className="mb-8">
-                      <WorkflowVerification 
-                        onVerificationComplete={setWorkflowVerified}
-                      />
+                    {/* Setup and Verification Steps */}
+                    <div className="mb-8 space-y-4">
+                      {setupRequired && !setupCompleted && (
+                        <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border border-slate-200/50 dark:border-slate-700/50 shadow-xl">
+                          <CardContent className="p-6">
+                            <div className="space-y-4">
+                              <div className="flex items-center space-x-3">
+                                <Settings className="w-5 h-5 text-blue-500" />
+                                <div>
+                                  <h3 className="font-semibold text-slate-900 dark:text-white">Repository Setup Required</h3>
+                                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                                    Initialize your bot repository and configure XYLO servers.
+                                  </p>
+                                </div>
+                              </div>
+                              <Button
+                                onClick={() => setupMutation.mutate()}
+                                disabled={setupMutation.isPending}
+                                className="bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white"
+                                data-testid="button-setup-repository"
+                              >
+                                {setupMutation.isPending ? (
+                                  <>
+                                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                                    Setting up repository...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Settings className="w-4 h-4 mr-2" />
+                                    Setup Repository
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+                      
+                      {(!setupRequired || setupCompleted) && (
+                        <WorkflowVerification 
+                          onVerificationComplete={setWorkflowVerified}
+                          onSetupRequired={setSetupRequired}
+                        />
+                      )}
                     </div>
 
                     <form onSubmit={handleDeploy} className="space-y-6">
@@ -339,7 +407,7 @@ export default function Home() {
 
                       <Button
                         type="submit"
-                        disabled={deployMutation.isPending || !workflowVerified}
+                        disabled={deployMutation.isPending || !workflowVerified || setupRequired}
                         className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:from-slate-400 disabled:to-slate-500 text-white font-semibold py-4 px-6 h-auto shadow-lg transition-all duration-300 hover:scale-[1.02] hover:shadow-xl rounded-xl disabled:scale-100 disabled:shadow-md"
                         data-testid="button-deploy"
                       >
@@ -348,10 +416,15 @@ export default function Home() {
                             <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent mr-3"></div>
                             Deploying Your Bot...
                           </>
+                        ) : setupRequired ? (
+                          <>
+                            <XCircle className="w-5 h-5 mr-3" />
+                            Complete Repository Setup Above
+                          </>
                         ) : !workflowVerified ? (
                           <>
                             <XCircle className="w-5 h-5 mr-3" />
-                            Complete Workflow Verification Above
+                            Complete Server Verification Above
                           </>
                         ) : (
                           <>
