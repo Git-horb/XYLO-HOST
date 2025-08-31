@@ -369,6 +369,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         // Fork doesn't exist
       }
+      
+      // Pre-check: If fork exists, verify Actions are likely to work
+      if (fork) {
+        await logStep('actions-check', 'running', 'Checking GitHub Actions compatibility...');
+        try {
+          // Try to get Actions permissions - this will fail if Actions are disabled
+          await makeGitHubRequest('GET', `repos/${user.login}/${REPO_NAME}/actions/permissions`, null, token);
+          await logStep('actions-check', 'success', 'GitHub Actions are enabled and accessible');
+        } catch (actionsError: any) {
+          if (actionsError.response?.status === 404) {
+            await logStep('actions-check', 'warning', `GitHub Actions may be disabled on your fork. You may need to enable them manually at: https://github.com/${user.login}/${REPO_NAME}/settings/actions`);
+          } else {
+            await logStep('actions-check', 'warning', 'Could not verify GitHub Actions status - proceeding with deployment');
+          }
+        }
+      }
 
       if (!fork) {
         await logStep('fork', 'running', 'Creating repository fork...');
@@ -377,6 +393,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await logStep('fork', 'success', 'Repository fork created successfully');
       } else {
         await logStep('fork', 'success', 'Using existing repository fork');
+      }
+      
+      // Important: Check if Actions are enabled on the fork
+      await logStep('actions-check', 'running', 'Verifying GitHub Actions are enabled on your fork...');
+      try {
+        await makeGitHubRequest('GET', `repos/${user.login}/${REPO_NAME}/actions/permissions`, null, token);
+        await logStep('actions-check', 'success', 'GitHub Actions are enabled and ready');
+      } catch (actionsError: any) {
+        if (actionsError.response?.status === 404) {
+          await logStep('actions-check', 'warning', `⚠️ GitHub Actions appear to be disabled on your fork. Enable them at: https://github.com/${user.login}/${REPO_NAME}/settings/actions`);
+        } else {
+          await logStep('actions-check', 'warning', `Could not verify Actions status (${actionsError.response?.status}). Proceeding with deployment...`);
+        }
       }
 
       // Step 3: Generate and create branch
@@ -681,6 +710,16 @@ jobs:
           throw new Error('Workflow file was not created successfully. Please add the workflow file manually to your repository.');
         }
         
+        // Check if GitHub Actions are enabled on this repository
+        console.log('Checking if GitHub Actions are enabled...');
+        try {
+          const repoInfo = await makeGitHubRequest('GET', `repos/${user.login}/${REPO_NAME}`, null, token);
+          const actionsEnabled = await makeGitHubRequest('GET', `repos/${user.login}/${REPO_NAME}/actions/permissions`, null, token);
+          console.log('Repository Actions permissions:', actionsEnabled);
+        } catch (actionsError: any) {
+          console.warn('Could not check Actions permissions:', actionsError.message);
+        }
+        
         console.log('Workflow file verified, triggering workflow...');
         console.log(`Triggering workflow: repos/${user.login}/${REPO_NAME}/actions/workflows/${WORKFLOW_FILE}/dispatches`);
         console.log(`Branch: ${finalBranchName}`);
@@ -700,15 +739,47 @@ jobs:
         await logStep('deploy', 'success', 'Deployment workflow triggered successfully');
       } catch (dispatchError: any) {
         console.error('Workflow dispatch failed:', dispatchError);
-        await logStep('deploy', 'failed', `Failed to trigger workflow: ${dispatchError.message}. Please manually add the workflow file to your repository and trigger it from the Actions tab.`);
-        
-        // Update deployment with instructions for manual workflow setup
-        await storage.updateDeployment(deployment.id, {
-          status: 'failed',
-          message: 'Workflow creation/triggering failed. Please manually add the workflow file to .github/workflows/deploy.yml and trigger it from GitHub Actions tab.'
+        console.error('Dispatch error details:', {
+          status: dispatchError.response?.status,
+          statusText: dispatchError.response?.statusText,
+          data: dispatchError.response?.data,
+          message: dispatchError.message
         });
         
-        throw dispatchError;
+        let errorMessage = 'Failed to trigger workflow';
+        let instructions = '';
+        
+        if (dispatchError.response?.status === 404) {
+          errorMessage = 'GitHub Actions may be disabled on your forked repository';
+          instructions = `Please enable GitHub Actions on your fork:
+1. Go to https://github.com/${user.login}/${REPO_NAME}/settings/actions
+2. Under "Actions permissions", select "Allow all actions and reusable workflows"
+3. Click "Save" and try deploying again
+
+Alternatively, you can manually trigger the workflow:
+1. Go to https://github.com/${user.login}/${REPO_NAME}/actions
+2. Click on "XYLO-MD-DEPLOY" workflow
+3. Click "Run workflow" and select your branch`;
+        } else if (dispatchError.response?.status === 403) {
+          errorMessage = 'Insufficient permissions to trigger GitHub Actions';
+          instructions = 'Please ensure you have admin or write access to the repository and try again.';
+        } else {
+          errorMessage = `Workflow dispatch failed: ${dispatchError.message}`;
+          instructions = `Please manually trigger the workflow:
+1. Go to https://github.com/${user.login}/${REPO_NAME}/actions
+2. Click on "XYLO-MD-DEPLOY" workflow
+3. Click "Run workflow" and select branch: ${finalBranchName}`;
+        }
+        
+        await logStep('deploy', 'failed', `${errorMessage}. ${instructions}`);
+        
+        // Update deployment with specific instructions
+        await storage.updateDeployment(deployment.id, {
+          status: 'failed',
+          message: `${errorMessage}\n\n${instructions}`
+        });
+        
+        throw new Error(errorMessage);
       }
 
       const workflowUrl = `https://github.com/${user.login}/${REPO_NAME}/actions`;
