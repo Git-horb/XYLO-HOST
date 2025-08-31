@@ -420,8 +420,22 @@ export default function Home() {
             </div>
             <div className="flex items-center space-x-6 text-sm text-muted-foreground">
               <a href="#" className="hover:text-foreground transition-colors">Documentation</a>
-              <a href="#" className="hover:text-foreground transition-colors">Support</a>
-              <a href="#" className="hover:text-foreground transition-colors">GitHub</a>
+              <a 
+                href="https://whatsapp.com/channel/0029VbAsXu9G8l58euAhew3f" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="hover:text-foreground transition-colors"
+              >
+                Support
+              </a>
+              <a 
+                href="https://github.com/DAV-EX" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="hover:text-foreground transition-colors"
+              >
+                GitHub
+              </a>
             </div>
           </div>
         </div>
