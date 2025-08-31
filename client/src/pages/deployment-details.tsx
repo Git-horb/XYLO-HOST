@@ -221,27 +221,28 @@ export default function DeploymentDetails() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-white dark:from-slate-900 dark:to-slate-800">
       {/* Modern Navigation Header */}
       <nav className="backdrop-blur-md bg-white/80 dark:bg-slate-900/80 border-b border-slate-200/50 dark:border-slate-700/50 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-3">
-              <div className="w-9 h-9 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-                <Zap className="w-5 h-5 text-white" />
+        <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 lg:px-8">
+          <div className="flex items-center justify-between h-14 sm:h-16">
+            <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </div>
-              <div>
-                <h1 className="text-xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent">XYLO-MD</h1>
-                <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">Deployment Platform</p>
+              <div className="min-w-0">
+                <h1 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent truncate">XYLO-MD</h1>
+                <p className="text-xs text-slate-600 dark:text-slate-400 font-medium hidden sm:block">Deployment Platform</p>
               </div>
             </div>
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-2 sm:space-x-3 flex-shrink-0">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setLocation('/deployments')}
-                className="hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                className="hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-xs sm:text-sm px-2 sm:px-3 py-1 sm:py-2"
                 data-testid="button-back-deployments"
               >
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Deployments
+                <ArrowLeft className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                <span className="hidden sm:inline">Deployments</span>
+                <span className="sm:hidden">Back</span>
               </Button>
               {deployment?.workflowUrl && (
                 <Button
@@ -249,6 +250,7 @@ export default function DeploymentDetails() {
                   size="sm"
                   asChild
                   data-testid="button-view-workflow"
+                  className="text-xs sm:text-sm px-2 sm:px-3 py-1 sm:py-2"
                 >
                   <a
                     href={deployment.workflowUrl}
@@ -256,8 +258,9 @@ export default function DeploymentDetails() {
                     rel="noopener noreferrer"
                     className="flex items-center"
                   >
-                    <ExternalLink className="w-4 h-4 mr-2" />
-                    Workflow
+                    <ExternalLink className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                    <span className="hidden sm:inline">Workflow</span>
+                    <span className="sm:hidden">View</span>
                   </a>
                 </Button>
               )}
@@ -269,44 +272,46 @@ export default function DeploymentDetails() {
       {/* Header Section */}
       <div className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 via-purple-600/10 to-pink-600/10 dark:from-blue-600/20 dark:via-purple-600/20 dark:to-pink-600/20"></div>
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="relative w-full max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-6 sm:py-8 lg:py-12">
           <div className="text-center">
-            <div className="flex items-center justify-center space-x-3 mb-6">
-              {getStatusIcon(deployment.status)}
-              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight">
-                <span className="bg-gradient-to-r from-slate-900 via-blue-900 to-purple-900 dark:from-white dark:via-blue-100 dark:to-purple-100 bg-clip-text text-transparent">
-                  {deployment.branchName || 'Unnamed Deployment'}
-                </span>
-              </h1>
+            <div className="flex flex-col sm:flex-row items-center justify-center space-y-3 sm:space-y-0 sm:space-x-3 mb-4 sm:mb-6">
+              <div className="flex items-center space-x-2 sm:space-x-3">
+                {getStatusIcon(deployment.status)}
+                <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl xl:text-5xl font-bold tracking-tight">
+                  <span className="bg-gradient-to-r from-slate-900 via-blue-900 to-purple-900 dark:from-white dark:via-blue-100 dark:to-purple-100 bg-clip-text text-transparent break-words">
+                    {deployment.branchName || 'Unnamed Deployment'}
+                  </span>
+                </h1>
+              </div>
               <Badge
                 variant="outline"
-                className={`text-lg px-4 py-2 ${getStatusColor(deployment.status)}`}
+                className={`text-sm sm:text-base lg:text-lg px-3 sm:px-4 py-1 sm:py-2 ${getStatusColor(deployment.status)} flex-shrink-0`}
               >
                 {deployment.status}
               </Badge>
             </div>
-            <p className="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto leading-relaxed">
+            <p className="text-sm sm:text-base lg:text-lg text-slate-600 dark:text-slate-400 max-w-xs sm:max-w-xl lg:max-w-2xl mx-auto leading-relaxed px-2">
               Real-time deployment monitoring with detailed logs and status updates for your XYLO-MD WhatsApp bot.
             </p>
           </div>
         </div>
       </div>
       
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid lg:grid-cols-3 gap-6">
+      <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-6 sm:py-8 lg:py-12">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Main Content - Logs */}
-          <div className="lg:col-span-2 space-y-6">
-            <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border border-slate-200/50 dark:border-slate-700/50 shadow-xl">
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
+          <div className="lg:col-span-2 space-y-4 sm:space-y-6 w-full">
+            <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border border-slate-200/50 dark:border-slate-700/50 shadow-xl w-full">
+              <CardHeader className="p-4 sm:p-6">
+                <CardTitle className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
                   <div className="flex items-center space-x-2">
-                    <Terminal className="w-5 h-5" />
-                    <span>Deployment Logs</span>
+                    <Terminal className="w-4 h-4 sm:w-5 sm:h-5" />
+                    <span className="text-sm sm:text-base">Deployment Logs</span>
                     {deployment.status === 'running' && (
-                      <RefreshCw className="w-4 h-4 animate-spin text-blue-500" />
+                      <RefreshCw className="w-3 h-3 sm:w-4 sm:h-4 animate-spin text-blue-500" />
                     )}
                   </div>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-2 justify-end sm:justify-start">
                     {deployment.status === 'running' && (
                       <div className="flex items-center space-x-1 text-xs">
                         {isWebSocketConnected ? (
@@ -325,33 +330,33 @@ export default function DeploymentDetails() {
                   </div>
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-4 sm:p-6">
                 {logsLoading ? (
-                  <div className="space-y-4">
+                  <div className="space-y-3 sm:space-y-4">
                     {[...Array(5)].map((_, i) => (
-                      <div key={i} className="flex items-center space-x-3">
-                        <Skeleton className="h-4 w-4 rounded-full" />
-                        <Skeleton className="h-4 flex-1" />
-                        <Skeleton className="h-4 w-16" />
+                      <div key={i} className="flex items-center space-x-2 sm:space-x-3">
+                        <Skeleton className="h-3 w-3 sm:h-4 sm:w-4 rounded-full" />
+                        <Skeleton className="h-3 sm:h-4 flex-1" />
+                        <Skeleton className="h-3 sm:h-4 w-12 sm:w-16" />
                       </div>
                     ))}
                   </div>
                 ) : displayLogs && displayLogs.length > 0 ? (
-                  <ScrollArea className="h-96">
-                    <div className="space-y-4" data-testid="deployment-logs">
+                  <ScrollArea className="h-64 sm:h-80 lg:h-96">
+                    <div className="space-y-3 sm:space-y-4" data-testid="deployment-logs">
                       {displayLogs.map((log, index) => (
-                        <div key={log.id} className="flex items-start space-x-3">
-                          <div className="flex-shrink-0 mt-1">
+                        <div key={log.id} className="flex items-start space-x-2 sm:space-x-3">
+                          <div className="flex-shrink-0 mt-0.5 sm:mt-1">
                             {getStatusIcon(log.status)}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between">
-                              <p className="text-sm font-medium capitalize">{log.step}</p>
-                              <span className="text-xs text-muted-foreground">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-1 sm:space-y-0">
+                              <p className="text-xs sm:text-sm font-medium capitalize break-words">{log.step}</p>
+                              <span className="text-xs text-muted-foreground flex-shrink-0">
                                 {format(new Date(log.timestamp), 'HH:mm:ss')}
                               </span>
                             </div>
-                            <p className={`text-sm ${getLogStatusColor(log.status)}`}>
+                            <p className={`text-xs sm:text-sm ${getLogStatusColor(log.status)} break-words leading-relaxed`}>
                               {log.message}
                             </p>
                           </div>
@@ -360,9 +365,9 @@ export default function DeploymentDetails() {
                     </div>
                   </ScrollArea>
                 ) : (
-                  <div className="text-center py-8">
-                    <Terminal className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-muted-foreground">No logs available yet</p>
+                  <div className="text-center py-6 sm:py-8">
+                    <Terminal className="w-8 h-8 sm:w-12 sm:h-12 text-muted-foreground mx-auto mb-3 sm:mb-4" />
+                    <p className="text-sm sm:text-base text-muted-foreground">No logs available yet</p>
                   </div>
                 )}
               </CardContent>
@@ -370,48 +375,48 @@ export default function DeploymentDetails() {
           </div>
 
           {/* Sidebar - Deployment Info */}
-          <div className="space-y-6">
-            <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border border-slate-200/50 dark:border-slate-700/50 shadow-xl">
-              <CardHeader>
-                <CardTitle>Deployment Info</CardTitle>
+          <div className="space-y-4 sm:space-y-6 w-full">
+            <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border border-slate-200/50 dark:border-slate-700/50 shadow-xl w-full">
+              <CardHeader className="p-4 sm:p-6">
+                <CardTitle className="text-sm sm:text-base">Deployment Info</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="p-4 sm:p-6 space-y-3 sm:space-y-4">
                 <div className="space-y-3">
-                  <div className="flex items-center space-x-3">
-                    <GitBranch className="w-4 h-4 text-muted-foreground" />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">Branch</p>
-                      <p className="text-sm text-muted-foreground">
+                  <div className="flex items-start space-x-3">
+                    <GitBranch className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs sm:text-sm font-medium">Branch</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground break-words">
                         {deployment.branchName || 'N/A'}
                       </p>
                     </div>
                   </div>
 
-                  <div className="flex items-center space-x-3">
-                    <User className="w-4 h-4 text-muted-foreground" />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">GitHub User</p>
-                      <p className="text-sm text-muted-foreground">
+                  <div className="flex items-start space-x-3">
+                    <User className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs sm:text-sm font-medium">GitHub User</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground break-words">
                         {deployment.githubUsername}
                       </p>
                     </div>
                   </div>
 
-                  <div className="flex items-center space-x-3">
-                    <Calendar className="w-4 h-4 text-muted-foreground" />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">Created</p>
-                      <p className="text-sm text-muted-foreground">
+                  <div className="flex items-start space-x-3">
+                    <Calendar className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs sm:text-sm font-medium">Created</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground break-words">
                         {format(new Date(deployment.createdAt), 'PPpp')}
                       </p>
                     </div>
                   </div>
 
-                  <div className="flex items-center space-x-3">
-                    <Activity className="w-4 h-4 text-muted-foreground" />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">Last Updated</p>
-                      <p className="text-sm text-muted-foreground">
+                  <div className="flex items-start space-x-3">
+                    <Activity className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs sm:text-sm font-medium">Last Updated</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground break-words">
                         {formatDistanceToNow(new Date(deployment.updatedAt))} ago
                       </p>
                     </div>
@@ -422,18 +427,18 @@ export default function DeploymentDetails() {
                   <>
                     <Separator />
                     <div>
-                      <p className="text-sm font-medium mb-2">Status Message</p>
+                      <p className="text-xs sm:text-sm font-medium mb-2">Status Message</p>
                       <div className="p-3 bg-muted rounded-lg">
-                        <p className="text-sm text-muted-foreground whitespace-pre-line">
+                        <p className="text-xs sm:text-sm text-muted-foreground whitespace-pre-line break-words">
                           {deployment.message}
                         </p>
                         
                         {/* Add GitHub workflow enablement button for failed deployments */}
                         {deployment.status === 'failed' && deployment.message.includes('Fork workflows need manual enablement') && (
-                          <div className="mt-4 space-y-2">
+                          <div className="mt-3 sm:mt-4 space-y-2">
                             <Button
                               asChild
-                              className="w-full bg-green-600 hover:bg-green-700 text-white"
+                              className="w-full bg-green-600 hover:bg-green-700 text-white text-xs sm:text-sm py-2 sm:py-3"
                               data-testid="button-enable-workflows"
                             >
                               <a
@@ -442,8 +447,9 @@ export default function DeploymentDetails() {
                                 rel="noopener noreferrer"
                                 className="flex items-center justify-center"
                               >
-                                <Github className="w-4 h-4 mr-2" />
-                                Enable Workflows on GitHub
+                                <Github className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                                <span className="hidden sm:inline">Enable Workflows on GitHub</span>
+                                <span className="sm:hidden">Enable Workflows</span>
                               </a>
                             </Button>
                             <p className="text-xs text-center text-muted-foreground">
@@ -458,26 +464,28 @@ export default function DeploymentDetails() {
               </CardContent>
             </Card>
 
-            <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border border-slate-200/50 dark:border-slate-700/50 shadow-xl">
-              <CardHeader>
-                <CardTitle>Quick Actions</CardTitle>
+            <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border border-slate-200/50 dark:border-slate-700/50 shadow-xl w-full">
+              <CardHeader className="p-4 sm:p-6">
+                <CardTitle className="text-sm sm:text-base">Quick Actions</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="p-4 sm:p-6 space-y-2 sm:space-y-3">
                 <Button
                   variant="outline"
-                  className="w-full justify-start"
+                  className="w-full justify-start text-xs sm:text-sm py-2 sm:py-3"
                   onClick={() => setLocation('/deployments')}
                   data-testid="button-view-all-deployments"
                 >
-                  View All Deployments
+                  <span className="hidden sm:inline">View All Deployments</span>
+                  <span className="sm:hidden">All Deployments</span>
                 </Button>
                 <Button
                   variant="outline"
-                  className="w-full justify-start"
+                  className="w-full justify-start text-xs sm:text-sm py-2 sm:py-3"
                   onClick={() => setLocation('/')}
                   data-testid="button-new-deployment"
                 >
-                  Create New Deployment
+                  <span className="hidden sm:inline">Create New Deployment</span>
+                  <span className="sm:hidden">New Deployment</span>
                 </Button>
               </CardContent>
             </Card>
