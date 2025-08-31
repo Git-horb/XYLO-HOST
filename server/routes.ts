@@ -665,14 +665,23 @@ jobs:
 
       await logStep('workflow', 'success', 'GitHub Actions workflow created');
 
-      // Step 6: Trigger deployment
+      // Step 6: Trigger deployment (only if workflow was created successfully)
       await logStep('deploy', 'running', 'Triggering deployment workflow...');
       
       // Wait a moment for GitHub to process the new workflow file
       console.log('Waiting for GitHub to process workflow file...');
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await new Promise(resolve => setTimeout(resolve, 5000)); // Increased wait time
       
       try {
+        // First verify the workflow file was created
+        console.log('Verifying workflow file exists...');
+        const workflowCheck = await makeGitHubRequest('GET', `repos/${user.login}/${REPO_NAME}/contents/.github/workflows/${WORKFLOW_FILE}?ref=${finalBranchName}`, null, token);
+        
+        if (!workflowCheck) {
+          throw new Error('Workflow file was not created successfully. Please add the workflow file manually to your repository.');
+        }
+        
+        console.log('Workflow file verified, triggering workflow...');
         console.log(`Triggering workflow: repos/${user.login}/${REPO_NAME}/actions/workflows/${WORKFLOW_FILE}/dispatches`);
         console.log(`Branch: ${finalBranchName}`);
         
@@ -691,32 +700,15 @@ jobs:
         await logStep('deploy', 'success', 'Deployment workflow triggered successfully');
       } catch (dispatchError: any) {
         console.error('Workflow dispatch failed:', dispatchError);
-        await logStep('deploy', 'failed', `Failed to trigger workflow: ${dispatchError.message}`);
+        await logStep('deploy', 'failed', `Failed to trigger workflow: ${dispatchError.message}. Please manually add the workflow file to your repository and trigger it from the Actions tab.`);
         
-        // Try alternative approach - check if workflow exists first
-        try {
-          console.log('Checking if workflow file exists...');
-          const workflowCheck = await makeGitHubRequest('GET', `repos/${user.login}/${REPO_NAME}/contents/.github/workflows/${WORKFLOW_FILE}?ref=${finalBranchName}`, null, token);
-          console.log('Workflow file exists:', !!workflowCheck);
-          
-          if (workflowCheck) {
-            console.log('Retrying workflow dispatch...');
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            await makeGitHubRequest('POST', `repos/${user.login}/${REPO_NAME}/actions/workflows/${WORKFLOW_FILE}/dispatches`, {
-              ref: finalBranchName
-            }, token);
-            
-            await storage.updateDeployment(deployment.id, {
-              status: 'running',
-              message: 'Bot deployment workflow is now running (retry successful)'
-            });
-            
-            await logStep('deploy', 'success', 'Deployment workflow triggered successfully (after retry)');
-          }
-        } catch (retryError: any) {
-          console.error('Retry also failed:', retryError);
-          throw dispatchError; // Throw original error
-        }
+        // Update deployment with instructions for manual workflow setup
+        await storage.updateDeployment(deployment.id, {
+          status: 'failed',
+          message: 'Workflow creation/triggering failed. Please manually add the workflow file to .github/workflows/deploy.yml and trigger it from GitHub Actions tab.'
+        });
+        
+        throw dispatchError;
       }
 
       const workflowUrl = `https://github.com/${user.login}/${REPO_NAME}/actions`;
