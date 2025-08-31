@@ -139,8 +139,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     console.log(`Starting log streaming for deployment: ${deploymentId}, status: ${deployment.status}`);
 
-    // Get user token (this is a simplified approach - in production you'd want better auth handling)
-    const token = process.env.GITHUB_TOKEN || 'your-github-token';
+    // Get the user's GitHub token from deployment data
+    const token = deployment.githubToken;
+    
+    if (!token) {
+      console.error(`No GitHub token found for deployment ${deploymentId}`);
+      return;
+    }
+    
+    console.log('Using user GitHub token for log streaming');
 
     const streamLogs = async () => {
       try {
@@ -173,7 +180,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         // Continue streaming if deployment is still running and we have clients
-        const stillHasClients = activeStreams.get(deploymentId)?.size > 0;
+        const stillHasClients = activeStreams.get(deploymentId)?.size ?? 0 > 0;
         if ((currentDeployment.status === 'running' || currentDeployment.status === 'pending') && stillHasClients) {
           setTimeout(streamLogs, 3000); // Poll every 3 seconds for more responsive updates
         } else {
@@ -331,6 +338,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         branchName: branchName || null,
         githubUsername: username,
         repositoryName: REPO_NAME,
+        githubToken: token, // Store user's GitHub token for log access
         status: 'running',
         message: 'Deployment started'
       });

@@ -15,6 +15,7 @@ export const deployments = pgTable("deployments", {
   branchName: text("branch_name"),
   githubUsername: text("github_username").notNull(),
   repositoryName: text("repository_name").notNull(),
+  githubToken: text("github_token"), // Store user's GitHub token for log access
   status: text("status").notNull().default("pending"), // pending, running, success, failed
   message: text("message"),
   workflowUrl: text("workflow_url"),
@@ -41,6 +42,7 @@ export const insertDeploymentSchema = createInsertSchema(deployments).pick({
   branchName: true,
   githubUsername: true,
   repositoryName: true,
+  githubToken: true,
   status: true,
   message: true,
   workflowUrl: true,

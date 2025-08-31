@@ -52,6 +52,7 @@ export class MemStorage implements IStorage {
       ...insertDeployment,
       status: insertDeployment.status || 'pending',
       branchName: insertDeployment.branchName || null,
+      githubToken: insertDeployment.githubToken || null,
       message: insertDeployment.message || null,
       workflowUrl: insertDeployment.workflowUrl || null,
       id,
