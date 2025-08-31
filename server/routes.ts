@@ -32,15 +32,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create HTTP server
   const server = createServer(app);
   
-  // WebSocket server for live logs
-  const wss = new WebSocketServer({ server });
+  // WebSocket server for live logs - use path to avoid Vite HMR conflicts
+  const wss = new WebSocketServer({ 
+    server,
+    path: '/api/logs-ws' // Specific path to avoid conflicts with Vite HMR
+  });
   
   // Store active log streams
   const activeStreams = new Map<string, Set<any>>();
 
   // WebSocket connection handler
   wss.on('connection', (ws, req) => {
-    console.log('WebSocket client connected');
+    console.log('WebSocket client connected to logs endpoint');
     
     ws.on('message', (message) => {
       try {
@@ -69,7 +72,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           activeStreams.delete(deploymentId);
         }
       });
-      console.log('WebSocket client disconnected');
+      console.log('WebSocket client disconnected from logs endpoint');
+    });
+    
+    ws.on('error', (error) => {
+      console.error('WebSocket error:', error);
     });
   });
 
@@ -395,14 +402,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await logStep('fork', 'success', 'Using existing repository fork');
       }
       
-      // Important: Check if Actions are enabled on the fork
+      // Important: Check and auto-enable Actions if needed
       await logStep('actions-check', 'running', 'Verifying GitHub Actions are enabled on your fork...');
       try {
-        await makeGitHubRequest('GET', `repos/${user.login}/${REPO_NAME}/actions/permissions`, null, token);
-        await logStep('actions-check', 'success', 'GitHub Actions are enabled and ready');
+        const actionsPermissions = await makeGitHubRequest('GET', `repos/${user.login}/${REPO_NAME}/actions/permissions`, null, token);
+        
+        if (actionsPermissions && actionsPermissions.enabled === false) {
+          // Actions are disabled, let's enable them automatically
+          await logStep('actions-enable', 'running', 'GitHub Actions are disabled. Auto-enabling them now...');
+          
+          await makeGitHubRequest('PUT', `repos/${user.login}/${REPO_NAME}/actions/permissions`, {
+            enabled: true,
+            allowed_actions: 'all'
+          }, token);
+          
+          await logStep('actions-enable', 'success', '✅ GitHub Actions have been automatically enabled!');
+        } else {
+          await logStep('actions-check', 'success', 'GitHub Actions are already enabled and ready');
+        }
       } catch (actionsError: any) {
         if (actionsError.response?.status === 404) {
-          await logStep('actions-check', 'warning', `⚠️ GitHub Actions appear to be disabled on your fork. Enable them at: https://github.com/${user.login}/${REPO_NAME}/settings/actions`);
+          // Likely means Actions are disabled entirely - try to enable them
+          await logStep('actions-enable', 'running', 'GitHub Actions appear disabled. Attempting to auto-enable...');
+          
+          try {
+            await makeGitHubRequest('PUT', `repos/${user.login}/${REPO_NAME}/actions/permissions`, {
+              enabled: true,
+              allowed_actions: 'all'
+            }, token);
+            
+            await logStep('actions-enable', 'success', '✅ GitHub Actions have been automatically enabled!');
+          } catch (enableError: any) {
+            await logStep('actions-enable', 'failed', `Failed to auto-enable Actions (${enableError.response?.status}). You may need to enable them manually at: https://github.com/${user.login}/${REPO_NAME}/settings/actions`);
+          }
         } else {
           await logStep('actions-check', 'warning', `Could not verify Actions status (${actionsError.response?.status}). Proceeding with deployment...`);
         }
@@ -697,9 +729,9 @@ jobs:
       // Step 6: Trigger deployment (only if workflow was created successfully)
       await logStep('deploy', 'running', 'Triggering deployment workflow...');
       
-      // Wait a moment for GitHub to process the new workflow file
-      console.log('Waiting for GitHub to process workflow file...');
-      await new Promise(resolve => setTimeout(resolve, 5000)); // Increased wait time
+      // Wait for GitHub to process the new workflow file and Actions enablement
+      console.log('Waiting for GitHub to process workflow file and Actions settings...');
+      await new Promise(resolve => setTimeout(resolve, 8000)); // Extended wait time for Actions enablement
       
       try {
         // First verify the workflow file was created
@@ -750,16 +782,17 @@ jobs:
         let instructions = '';
         
         if (dispatchError.response?.status === 404) {
-          errorMessage = 'GitHub Actions may be disabled on your forked repository';
-          instructions = `Please enable GitHub Actions on your fork:
-1. Go to https://github.com/${user.login}/${REPO_NAME}/settings/actions
-2. Under "Actions permissions", select "Allow all actions and reusable workflows"
-3. Click "Save" and try deploying again
+          errorMessage = 'Workflow dispatch failed - this may be a GitHub processing delay';
+          instructions = `The workflow file exists but GitHub may still be processing the Actions enablement. You can:
 
-Alternatively, you can manually trigger the workflow:
-1. Go to https://github.com/${user.login}/${REPO_NAME}/actions
-2. Click on "XYLO-MD-DEPLOY" workflow
-3. Click "Run workflow" and select your branch`;
+1. Wait 1-2 minutes and try deploying again, or
+2. Manually trigger the workflow:
+   - Go to https://github.com/${user.login}/${REPO_NAME}/actions
+   - Click on "XYLO-MD-DEPLOY" workflow
+   - Click "Run workflow" and select branch: ${finalBranchName}
+
+If this persists, check that Actions are enabled at:
+https://github.com/${user.login}/${REPO_NAME}/settings/actions`;
         } else if (dispatchError.response?.status === 403) {
           errorMessage = 'Insufficient permissions to trigger GitHub Actions';
           instructions = 'Please ensure you have admin or write access to the repository and try again.';

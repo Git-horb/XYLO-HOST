@@ -93,7 +93,7 @@ export default function DeploymentDetails() {
     if (!deploymentId || !deployment) return;
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}`;
+    const wsUrl = `${protocol}//${window.location.host}/api/logs-ws`; // Use specific path to avoid Vite HMR conflicts
     
     try {
       const ws = new WebSocket(wsUrl);
