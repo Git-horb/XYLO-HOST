@@ -19,10 +19,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use(session({
     secret: process.env.SESSION_SECRET || 'xylo-md-deployment-secret',
     resave: false,
-    saveUninitialized: false,
+    saveUninitialized: true,
     cookie: { 
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+      secure: false, // Set to false for now to allow HTTP in development
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      sameSite: 'lax'
     }
   }));
 
@@ -64,6 +66,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/auth', (req: Request, res: Response) => {
     const state = Math.random().toString(36).substring(2, 15);
     req.session.state = state;
+    
+    // Debug logging for session creation
+    console.log('OAuth init - created state:', state);
+    console.log('OAuth init - session ID:', req.session.id);
+    
     const callbackUrl = getCallbackUrl(req);
     res.redirect(`https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&redirect_uri=${encodeURIComponent(callbackUrl)}&state=${state}&scope=repo,workflow`);
   });
@@ -72,8 +79,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/auth/callback', async (req: Request, res: Response) => {
     const { code, state } = req.query;
     
+    // Debug logging for state validation
+    console.log('OAuth callback - received state:', state);
+    console.log('OAuth callback - session state:', req.session.state);
+    console.log('OAuth callback - session ID:', req.session.id);
+    
     if (state !== req.session.state) {
-      return res.status(403).json({ error: 'Invalid state parameter' });
+      console.error('State mismatch - possible session issue');
+      const protocol = req.headers['x-forwarded-proto'] || 'http';
+      const host = req.headers.host;
+      return res.redirect(`${protocol}://${host}/?error=${encodeURIComponent('Authentication failed. Please try again.')}`);
     }
 
     try {
@@ -98,10 +113,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       req.session.githubToken = accessToken;
       req.session.githubUsername = userResponse.login;
 
-      // Redirect to frontend with success
+      // Redirect to deployment page after successful authentication
       const protocol = req.headers['x-forwarded-proto'] || 'http';
       const host = req.headers.host;
-      res.redirect(`${protocol}://${host}/?authenticated=true`);
+      res.redirect(`${protocol}://${host}/deployments?authenticated=true`);
     } catch (error: any) {
       console.error('OAuth error:', error);
       const protocol = req.headers['x-forwarded-proto'] || 'http';
