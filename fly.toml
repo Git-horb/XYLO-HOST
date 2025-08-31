@@ -1,23 +1,23 @@
-# fly.toml app configuration file generated for xylo-host on 2025-08-31
+# fly.toml app configuration file generated for xylo-host on 2025-08-31T16:20:43Z
 #
-# Docs: https://fly.io/docs/reference/configuration/
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
 
-app = "xylo-host"
-primary_region = "iad"
+app = 'xylo-host'
+primary_region = 'jnb'
 
 [build]
-  # If using Dockerfile, uncomment below:
-  # dockerfile = "Dockerfile"
-
-[env]
-  SESSION_SECRET = "DI48HrMUTkSMrfqDaFoQp7ijj8CsYv6hxTjAu6j8BkAXJ578ac5wX/4PMTwEaKICcNmxuG9IECTeWuXU393TOw=="
-  GITHUB_CLIENT_ID = "Ov23liodb7TKIr9E8pJc"
-  GITHUB_CLIENT_SECRET = "c4579933e3d5f6fd6415978cbd474519a8e6eaf1"
 
 [http_service]
   internal_port = 3000
   force_https = true
-  auto_stop_machines = true
+  auto_stop_machines = 'stop'
   auto_start_machines = true
-  min_machines_running = 1
-  processes = ["app"]
+  min_machines_running = 0
+  processes = ['app']
+
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
+  memory_mb = 1024
