@@ -20,7 +20,8 @@ import {
   User,
   Activity,
   Wifi,
-  WifiOff
+  WifiOff,
+  Github
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import type { Deployment, DeploymentLog } from '@shared/schema';
@@ -395,12 +396,38 @@ export default function DeploymentDetails() {
                     <Separator />
                     <div>
                       <p className="text-sm font-medium mb-2">Status Message</p>
-                      <p className="text-sm text-muted-foreground p-3 bg-muted rounded-lg">
-                        {deployment.message}
-                      </p>
+                      <div className="p-3 bg-muted rounded-lg">
+                        <p className="text-sm text-muted-foreground whitespace-pre-line">
+                          {deployment.message}
+                        </p>
+                        
+                        {/* Add GitHub workflow enablement button for failed deployments */}
+                        {deployment.status === 'failed' && deployment.message.includes('Fork workflows need manual enablement') && (
+                          <div className="mt-4 space-y-2">
+                            <Button
+                              asChild
+                              className="w-full bg-green-600 hover:bg-green-700 text-white"
+                              data-testid="button-enable-workflows"
+                            >
+                              <a
+                                href={`https://github.com/${deployment.githubUsername}/${deployment.repositoryName}/actions`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center justify-center"
+                              >
+                                <Github className="w-4 h-4 mr-2" />
+                                Enable Workflows on GitHub
+                              </a>
+                            </Button>
+                            <p className="text-xs text-center text-muted-foreground">
+                              Click above, then return here and try deploying again
+                            </p>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </>
-                )}
+                )
               </CardContent>
             </Card>
 
