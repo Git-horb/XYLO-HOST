@@ -415,8 +415,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         fork = await makeGitHubRequest('POST', `repos/${REPO_OWNER}/${REPO_NAME}/forks`, {}, token);
         await new Promise(resolve => setTimeout(resolve, 2000));
         await logStep('fork', 'success', 'Repository fork created successfully');
+        
+        // Add important note about workflow enablement for new forks
+        await logStep('fork-info', 'warning', `⚠️ New fork created. GitHub disables workflows on forks by default for security. You'll need to enable them manually one time.`);
       } else {
         await logStep('fork', 'success', 'Using existing repository fork');
+        
+        // Check if this is a fork and add helpful info
+        if (fork.fork) {
+          await logStep('fork-info', 'info', `🔄 Working with forked repository. If this is your first deployment, you may need to enable workflows manually.`);
+        }
       }
       
       // Important: Check and auto-enable Actions if needed
@@ -817,7 +825,7 @@ jobs:
           message: 'Bot deployment workflow is now running'
         });
         
-        await logStep('deploy', 'success', 'Deployment workflow triggered successfully');
+        await logStep('deploy', 'success', '✅ Deployment workflow triggered successfully! Check GitHub Actions tab to see progress.');
       } catch (dispatchError: any) {
         console.error('Workflow dispatch failed:', dispatchError);
         console.error('Dispatch error details:', {
@@ -827,21 +835,31 @@ jobs:
           message: dispatchError.message
         });
         
+        // Check if this is a fork to provide more specific guidance
+        const isFork = fork && fork.fork === true;
+        
         let errorMessage = 'Failed to trigger workflow';
         let instructions = '';
         
         if (dispatchError.response?.status === 404) {
-          errorMessage = 'Workflow dispatch failed - this may be a GitHub processing delay';
-          instructions = `The workflow file exists but GitHub may still be processing the Actions enablement. You can:
+          if (isFork) {
+            errorMessage = '🔒 Fork workflows need manual enablement (one-time setup)';
+            instructions = `GitHub automatically disables workflows on forked repositories for security.
 
-1. Wait 1-2 minutes and try deploying again, or
-2. Manually trigger the workflow:
-   - Go to https://github.com/${user.login}/${REPO_NAME}/actions
-   - Click on "XYLO-MD-DEPLOY" workflow
-   - Click "Run workflow" and select branch: ${finalBranchName}
+🔧 QUICK FIX (30 seconds):
+1. Open: https://github.com/${user.login}/${REPO_NAME}/actions
+2. Click: "I understand my workflows, go ahead and enable them" 
+3. Return here and deploy again
 
-If this persists, check that Actions are enabled at:
-https://github.com/${user.login}/${REPO_NAME}/settings/actions`;
+✨ GOOD NEWS: This is only needed once! After enabling, all future deployments will work automatically.
+
+This is a GitHub security requirement that cannot be bypassed via API.`;
+          } else {
+            errorMessage = 'Workflow not found or Actions disabled';
+            instructions = `Please check:
+1. Actions are enabled: https://github.com/${user.login}/${REPO_NAME}/settings/actions
+2. Workflow file exists: https://github.com/${user.login}/${REPO_NAME}/blob/${finalBranchName}/.github/workflows/${WORKFLOW_FILE}`;
+          }
         } else if (dispatchError.response?.status === 403) {
           errorMessage = 'Insufficient permissions to trigger GitHub Actions';
           instructions = 'Please ensure you have admin or write access to the repository and try again.';
