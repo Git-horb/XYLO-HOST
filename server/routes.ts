@@ -126,19 +126,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Function to start log streaming for a deployment
   async function startLogStreaming(deploymentId: string) {
     const deployment = await storage.getDeployment(deploymentId);
-    if (!deployment || deployment.status !== 'running') return;
+    if (!deployment) {
+      console.log(`Deployment ${deploymentId} not found for log streaming`);
+      return;
+    }
 
     const clients = activeStreams.get(deploymentId);
-    if (!clients || clients.size === 0) return;
+    if (!clients || clients.size === 0) {
+      console.log(`No clients connected for deployment ${deploymentId}`);
+      return;
+    }
 
-    console.log(`Starting log streaming for deployment: ${deploymentId}`);
+    console.log(`Starting log streaming for deployment: ${deploymentId}, status: ${deployment.status}`);
 
     // Get user token (this is a simplified approach - in production you'd want better auth handling)
     const token = process.env.GITHUB_TOKEN || 'your-github-token';
 
     const streamLogs = async () => {
       try {
+        // Refresh deployment status each time
+        const currentDeployment = await storage.getDeployment(deploymentId);
+        if (!currentDeployment) {
+          console.log(`Deployment ${deploymentId} no longer exists, stopping log stream`);
+          return;
+        }
+
         const logs = await fetchWorkflowLogs(deploymentId, token);
+        console.log(`Fetched ${logs.length} logs for deployment ${deploymentId}`);
         
         // Broadcast logs to all connected clients for this deployment
         const message = JSON.stringify({
@@ -148,21 +162,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
           timestamp: new Date().toISOString()
         });
 
-        clients.forEach(client => {
-          if (client.readyState === 1) { // WebSocket.OPEN
-            client.send(message);
-          }
-        });
+        const currentClients = activeStreams.get(deploymentId);
+        if (currentClients && currentClients.size > 0) {
+          currentClients.forEach(client => {
+            if (client.readyState === 1) { // WebSocket.OPEN
+              console.log(`Sending ${logs.length} logs to client for deployment ${deploymentId}`);
+              client.send(message);
+            }
+          });
+        }
 
-        // Continue streaming if deployment is still running
-        if (deployment.status === 'running' && clients.size > 0) {
-          setTimeout(streamLogs, 5000); // Poll every 5 seconds
+        // Continue streaming if deployment is still running and we have clients
+        const stillHasClients = activeStreams.get(deploymentId)?.size > 0;
+        if ((currentDeployment.status === 'running' || currentDeployment.status === 'pending') && stillHasClients) {
+          setTimeout(streamLogs, 3000); // Poll every 3 seconds for more responsive updates
+        } else {
+          console.log(`Stopping log stream for ${deploymentId}. Status: ${currentDeployment.status}, Clients: ${stillHasClients}`);
         }
       } catch (error) {
         console.error('Error in log streaming:', error);
+        // Retry after error
+        const currentClients = activeStreams.get(deploymentId);
+        if (currentClients && currentClients.size > 0) {
+          setTimeout(streamLogs, 5000);
+        }
       }
     };
 
+    // Start streaming immediately
     streamLogs();
   }
 
