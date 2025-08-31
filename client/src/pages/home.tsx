@@ -17,8 +17,10 @@ interface AuthStatus {
 interface DeploymentResponse {
   success: boolean;
   message: string;
+  deploymentId?: string;
   branch?: string;
   repository?: string;
+  workflowUrl?: string;
   error?: string;
 }
 
@@ -80,6 +82,10 @@ export default function Home() {
         });
         setSessionId('');
         setBranchName('');
+        // Navigate to deployment details
+        if (data.deploymentId) {
+          window.location.href = `/deployments/${data.deploymentId}`;
+        }
       } else {
         throw new Error(data.error || 'Deployment failed');
       }
@@ -136,7 +142,18 @@ export default function Home() {
                 <p className="text-sm text-primary-foreground/80">Deployment Platform</p>
               </div>
             </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-3">
+              {authStatus?.authenticated && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => window.location.href = '/deployments'}
+                  className="text-primary-foreground hover:bg-primary/20"
+                  data-testid="button-view-deployments"
+                >
+                  View Deployments
+                </Button>
+              )}
               <div className="hidden sm:flex items-center space-x-2 text-sm text-primary-foreground/80">
                 <div className="w-2 h-2 bg-accent rounded-full"></div>
                 <span data-testid="status-deployment">
@@ -157,24 +174,24 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-8">
+        <div className="grid lg:grid-cols-2 gap-6 lg:gap-8">
           {/* Login/Deployment Card */}
           {!showDeployment ? (
-            <Card className="shadow-lg">
-              <CardContent className="p-8">
+            <Card className="shadow-lg border-0 bg-gradient-to-br from-card to-card/80">
+              <CardContent className="p-6 sm:p-8">
                 <div className="text-center mb-6">
-                  <div className="w-16 h-16 bg-secondary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <div className="w-16 h-16 bg-secondary/10 rounded-xl flex items-center justify-center mx-auto mb-4 ring-1 ring-secondary/20">
                     <Github className="w-8 h-8 text-secondary" />
                   </div>
-                  <h3 className="text-2xl font-semibold mb-2">Connect with GitHub</h3>
-                  <p className="text-muted-foreground">
+                  <h3 className="text-xl sm:text-2xl font-semibold mb-2">Connect with GitHub</h3>
+                  <p className="text-muted-foreground text-sm sm:text-base">
                     Securely authenticate with GitHub to access your repositories and deploy your bot.
                   </p>
                 </div>
                 
                 <Button 
                   onClick={handleLogin}
-                  className="w-full bg-secondary hover:bg-secondary/90 text-secondary-foreground font-medium py-4 px-6 h-auto shadow-sm"
+                  className="w-full bg-secondary hover:bg-secondary/90 text-secondary-foreground font-medium py-3 sm:py-4 px-6 h-auto shadow-sm transition-all duration-200 hover:scale-[1.02]"
                   data-testid="button-github-login"
                 >
                   <Github className="w-5 h-5 mr-3" />
@@ -182,15 +199,15 @@ export default function Home() {
                 </Button>
 
                 <div className="mt-6 text-center">
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-xs sm:text-sm text-muted-foreground">
                     By connecting, you agree to our deployment terms and GitHub's privacy policy.
                   </p>
                 </div>
               </CardContent>
             </Card>
           ) : (
-            <Card className="shadow-lg">
-              <CardContent className="p-8">
+            <Card className="shadow-lg border-0 bg-gradient-to-br from-card to-card/80">
+              <CardContent className="p-6 sm:p-8">
                 <div className="flex items-center justify-between mb-6">
                   <div>
                     <h3 className="text-2xl font-semibold">Deploy XYLO-MD</h3>

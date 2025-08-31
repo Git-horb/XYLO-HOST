@@ -132,8 +132,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // Deploy endpoint
+  // Deploy endpoint with live logging
   app.post('/api/deploy', async (req: Request, res: Response) => {
+    let deployment: any = null;
+    
     try {
       const { sessionId, branchName } = deploymentRequestSchema.parse(req.body);
       const token = req.session.githubToken;
@@ -143,10 +145,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: 'Not authenticated' });
       }
 
-      // Get user info
+      // Create initial deployment record
+      deployment = await storage.createDeployment({
+        sessionId,
+        branchName: branchName || null,
+        githubUsername: username,
+        repositoryName: REPO_NAME,
+        status: 'running',
+        message: 'Deployment started'
+      });
+
+      // Helper function to log deployment steps
+      const logStep = async (step: string, status: string, message: string) => {
+        await storage.createDeploymentLog({
+          deploymentId: deployment.id,
+          step,
+          status,
+          message
+        });
+      };
+
+      // Step 1: Get user info
+      await logStep('init', 'running', 'Getting user information...');
       const user = await makeGitHubRequest('GET', 'user', null, token);
+      await logStep('init', 'success', `Connected as ${user.login}`);
       
-      // Check if fork exists
+      // Step 2: Check/Create fork
+      await logStep('fork', 'running', 'Checking repository fork...');
       let fork = null;
       try {
         fork = await makeGitHubRequest('GET', `repos/${user.login}/${REPO_NAME}`, null, token);
@@ -157,36 +182,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Fork doesn't exist
       }
 
-      // Create fork if it doesn't exist
       if (!fork) {
+        await logStep('fork', 'running', 'Creating repository fork...');
         fork = await makeGitHubRequest('POST', `repos/${REPO_OWNER}/${REPO_NAME}/forks`, {}, token);
-        // Wait a moment for fork to be ready
         await new Promise(resolve => setTimeout(resolve, 2000));
+        await logStep('fork', 'success', 'Repository fork created successfully');
+      } else {
+        await logStep('fork', 'success', 'Using existing repository fork');
       }
 
-      // Generate branch name if not provided
+      // Step 3: Generate and create branch
       const finalBranchName = branchName && branchName.trim() ? 
         branchName.trim() : 
         `xylo-${Math.random().toString(36).substring(2, 8)}`;
 
+      await logStep('branch', 'running', `Creating branch: ${finalBranchName}...`);
+
       // Check if branch exists
       const branchExists = await makeGitHubRequest('GET', `repos/${user.login}/${REPO_NAME}/git/ref/heads/${finalBranchName}`, null, token);
       if (branchExists) {
-        return res.status(400).json({ 
-          error: `Branch '${finalBranchName}' already exists. Please choose a different name.` 
-        });
+        await logStep('branch', 'failed', `Branch '${finalBranchName}' already exists`);
+        throw new Error(`Branch '${finalBranchName}' already exists. Please choose a different name.`);
       }
 
-      // Get main branch reference
+      // Get main branch reference and create new branch
       const mainRef = await makeGitHubRequest('GET', `repos/${user.login}/${REPO_NAME}/git/ref/heads/${MAIN_BRANCH}`, null, token);
-      
-      // Create new branch
       await makeGitHubRequest('POST', `repos/${user.login}/${REPO_NAME}/git/refs`, {
         ref: `refs/heads/${finalBranchName}`,
         sha: mainRef.object.sha
       }, token);
 
-      // Update config.js file
+      await logStep('branch', 'success', `Branch '${finalBranchName}' created successfully`);
+
+      // Step 4: Update config file
+      await logStep('config', 'running', 'Updating configuration file...');
       let configSha;
       try {
         const fileData = await makeGitHubRequest('GET', `repos/${user.login}/${REPO_NAME}/contents/config.js?ref=${finalBranchName}`, null, token);
@@ -202,7 +231,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         sha: configSha
       }, token);
 
-      // Create workflow file
+      await logStep('config', 'success', 'Configuration file updated with session ID');
+
+      // Step 5: Create workflow
+      await logStep('workflow', 'running', 'Creating GitHub Actions workflow...');
+      
       const workflowContent = `name: XYLO-MD-DEPLOY
 on:
   workflow_dispatch:
@@ -239,44 +272,51 @@ jobs:
         branch: finalBranchName
       }, token);
 
-      // Trigger workflow
+      await logStep('workflow', 'success', 'GitHub Actions workflow created');
+
+      // Step 6: Trigger deployment
+      await logStep('deploy', 'running', 'Triggering deployment workflow...');
+      
       await makeGitHubRequest('POST', `repos/${user.login}/${REPO_NAME}/actions/workflows/${WORKFLOW_FILE}/dispatches`, {
         ref: finalBranchName
       }, token);
 
-      // Save deployment to storage
-      await storage.createDeployment({
-        sessionId,
-        branchName: finalBranchName,
-        githubUsername: user.login,
-        repositoryName: REPO_NAME,
+      const workflowUrl = `https://github.com/${user.login}/${REPO_NAME}/actions`;
+      
+      await logStep('deploy', 'success', 'Deployment workflow triggered successfully');
+
+      // Update deployment with final status
+      await storage.updateDeployment(deployment.id, {
         status: 'success',
-        message: 'Deployment completed successfully'
+        message: 'Deployment completed successfully',
+        branchName: finalBranchName,
+        workflowUrl
       });
 
       res.json({ 
         success: true, 
         message: 'Deployment successful!', 
+        deploymentId: deployment.id,
         branch: finalBranchName, 
-        repository: `${user.login}/${REPO_NAME}` 
+        repository: `${user.login}/${REPO_NAME}`,
+        workflowUrl
       });
+
     } catch (error: any) {
       console.error('Deployment error:', error);
       
-      // Save failed deployment if we have user info
-      if (req.session.githubUsername) {
-        try {
-          await storage.createDeployment({
-            sessionId: req.body.sessionId || '',
-            branchName: req.body.branchName || '',
-            githubUsername: req.session.githubUsername,
-            repositoryName: REPO_NAME,
-            status: 'failed',
-            message: error.message
-          });
-        } catch (storageError) {
-          console.error('Failed to save deployment error:', storageError);
-        }
+      if (deployment) {
+        await storage.updateDeployment(deployment.id, {
+          status: 'failed',
+          message: error.message
+        });
+        
+        await storage.createDeploymentLog({
+          deploymentId: deployment.id,
+          step: 'error',
+          status: 'failed',
+          message: error.message
+        });
       }
 
       res.status(500).json({ 
@@ -295,6 +335,43 @@ jobs:
     try {
       const deployments = await storage.getDeploymentsByUser(req.session.githubUsername);
       res.json(deployments);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get deployment logs
+  app.get('/api/deployments/:id/logs', async (req: Request, res: Response) => {
+    if (!req.session.githubUsername) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    try {
+      const deployment = await storage.getDeployment(req.params.id);
+      if (!deployment || deployment.githubUsername !== req.session.githubUsername) {
+        return res.status(404).json({ error: 'Deployment not found' });
+      }
+
+      const logs = await storage.getDeploymentLogs(req.params.id);
+      res.json(logs);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get single deployment
+  app.get('/api/deployments/:id', async (req: Request, res: Response) => {
+    if (!req.session.githubUsername) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    try {
+      const deployment = await storage.getDeployment(req.params.id);
+      if (!deployment || deployment.githubUsername !== req.session.githubUsername) {
+        return res.status(404).json({ error: 'Deployment not found' });
+      }
+
+      res.json(deployment);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
