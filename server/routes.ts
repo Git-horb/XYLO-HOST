@@ -248,22 +248,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Parse and update the existing config, preserving all other settings
       let updatedConfigContent;
       try {
-        // Handle multiple SESSION_ID formats commonly used in WhatsApp bot configs
+        // More aggressive approach to find and replace SESSION_ID
         if (existingConfigContent.includes('SESSION_ID')) {
-          // Try different SESSION_ID patterns that might exist
-          updatedConfigContent = existingConfigContent
-            // Pattern 1: SESSION_ID: "value", SESSION_ID: 'value', or SESSION_ID: `value`
-            .replace(/SESSION_ID\s*:\s*(['"`])[^'"`]*\1/g, `SESSION_ID: "${sessionId}"`)
-            // Pattern 2: SESSION_ID = "value", SESSION_ID = 'value', or SESSION_ID = `value`
-            .replace(/SESSION_ID\s*=\s*(['"`])[^'"`]*\1/g, `SESSION_ID = "${sessionId}"`)
-            // Pattern 3: SESSION_ID with placeholder text (case insensitive)
-            .replace(/SESSION_ID\s*[:=]\s*['"`]?session\s*id\s*here['"`]?/gi, `SESSION_ID: "${sessionId}"`)
-            // Pattern 4: SESSION_ID with empty string
-            .replace(/SESSION_ID\s*[:=]\s*['"`]\s*['"`]/g, `SESSION_ID: "${sessionId}"`)
-            // Pattern 5: SESSION_ID without quotes (like SESSION_ID: something)
-            .replace(/SESSION_ID\s*:\s*[^,\n}'"`;]+/g, `SESSION_ID: "${sessionId}"`)
-            // Pattern 6: SESSION_ID equals without quotes
-            .replace(/SESSION_ID\s*=\s*[^,\n}'"`;]+/g, `SESSION_ID = "${sessionId}"`);
+          // Split content into lines for line-by-line processing
+          const lines = existingConfigContent.split('\n');
+          const updatedLines = lines.map(line => {
+            // If this line contains SESSION_ID, replace the entire value part
+            if (line.includes('SESSION_ID')) {
+              // Handle different formats on the same line
+              if (line.includes(':')) {
+                // Object property format: SESSION_ID: "value"
+                return line.replace(/(\s*SESSION_ID\s*:\s*).*$/, `$1"${sessionId}"`);
+              } else if (line.includes('=')) {
+                // Assignment format: SESSION_ID = "value"
+                return line.replace(/(\s*SESSION_ID\s*=\s*).*$/, `$1"${sessionId}"`);
+              }
+            }
+            return line;
+          });
+          updatedConfigContent = updatedLines.join('\n');
         } else {
           // Add SESSION_ID if it doesn't exist
           if (existingConfigContent.includes('module.exports')) {
@@ -276,7 +279,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
             updatedConfigContent = `SESSION_ID = "${sessionId}"\n` + existingConfigContent;
           }
         }
+        
+        // Ensure content actually changed
+        if (updatedConfigContent === existingConfigContent) {
+          console.log('Content unchanged, forcing SESSION_ID update...');
+          // Force an update by finding any SESSION_ID line and replacing it
+          updatedConfigContent = existingConfigContent.replace(
+            /.*SESSION_ID.*$/m,
+            `  SESSION_ID: "${sessionId}"`
+          );
+        }
       } catch (error) {
+        console.log('Error in config processing:', error);
         // Fallback: create new config if parsing fails
         updatedConfigContent = `module.exports = {\n  SESSION_ID: "${sessionId}"\n};`;
       }
