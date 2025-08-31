@@ -224,6 +224,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   async function makeGitHubRequest(method: string, endpoint: string, data: any, token: string) {
     const url = `https://api.github.com/${endpoint}`;
     try {
+      console.log(`GitHub API ${method} ${endpoint}`, data ? { hasData: true, keys: Object.keys(data) } : { hasData: false });
+      
       const response = await axios({
         method,
         url,
@@ -236,8 +238,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       return response.data;
     } catch (error: any) {
+      console.error(`GitHub API Error ${method} ${endpoint}:`, {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        message: error.response?.data?.message,
+        errors: error.response?.data?.errors,
+        originalError: error.message
+      });
+      
       if (error.response?.status === 404) return null;
-      throw new Error(error.response?.data?.message || error.message);
+      
+      // Provide more specific error messages
+      const errorMsg = error.response?.data?.message || error.message;
+      if (errorMsg.includes('sha')) {
+        throw new Error(`File update failed: ${errorMsg}. This usually means the file was modified since we last checked it.`);
+      }
+      
+      throw new Error(errorMsg);
     }
   }
 
@@ -534,12 +551,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('Session ID being written:', sessionId);
       console.log('Updated config content:', updatedConfigContent);
 
-      await makeGitHubRequest('PUT', `repos/${user.login}/${REPO_NAME}/contents/config.js`, {
+      const configUpdateData: any = {
         message: `Update config.js for ${finalBranchName}`,
         content: Buffer.from(updatedConfigContent).toString('base64'),
-        branch: finalBranchName,
-        sha: configSha
-      }, token);
+        branch: finalBranchName
+      };
+      
+      if (configSha) {
+        configUpdateData.sha = configSha;
+        console.log('Using SHA for config.js update:', configSha);
+      } else {
+        console.log('No SHA provided - creating new config.js file');
+      }
+      
+      await makeGitHubRequest('PUT', `repos/${user.login}/${REPO_NAME}/contents/config.js`, configUpdateData, token);
 
       // Also create/update .env file for environment variables
       try {
@@ -568,12 +593,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
           updatedEnvContent = existingEnvContent + (existingEnvContent ? '\n' : '') + `SESSION_ID=${sessionId}`;
         }
 
-        await makeGitHubRequest('PUT', `repos/${user.login}/${REPO_NAME}/contents/.env`, {
+        const envUpdateData: any = {
           message: `Update .env with session ID for ${finalBranchName}`,
           content: Buffer.from(updatedEnvContent).toString('base64'),
-          branch: finalBranchName,
-          sha: envSha
-        }, token);
+          branch: finalBranchName
+        };
+        
+        if (envSha) {
+          envUpdateData.sha = envSha;
+          console.log('Using SHA for .env update:', envSha);
+        } else {
+          console.log('No SHA provided - creating new .env file');
+        }
+        
+        await makeGitHubRequest('PUT', `repos/${user.login}/${REPO_NAME}/contents/.env`, envUpdateData, token);
 
         console.log('.env file updated with SESSION_ID');
       } catch (error) {
@@ -718,11 +751,27 @@ jobs:
           echo "Restart triggered successfully"
 `;
 
-      await makeGitHubRequest('PUT', `repos/${user.login}/${REPO_NAME}/contents/.github/workflows/${WORKFLOW_FILE}`, {
+      // Check if workflow file already exists to get SHA for update
+      let workflowSha;
+      try {
+        const existingWorkflow = await makeGitHubRequest('GET', `repos/${user.login}/${REPO_NAME}/contents/.github/workflows/${WORKFLOW_FILE}?ref=${finalBranchName}`, null, token);
+        workflowSha = existingWorkflow?.sha;
+        console.log('Existing workflow file found, will update with SHA:', workflowSha);
+      } catch (error) {
+        console.log('No existing workflow file found, creating new one');
+      }
+      
+      const workflowUpdateData: any = {
         message: `Create workflow for ${finalBranchName}`,
         content: Buffer.from(workflowContent).toString('base64'),
         branch: finalBranchName
-      }, token);
+      };
+      
+      if (workflowSha) {
+        workflowUpdateData.sha = workflowSha;
+      }
+      
+      await makeGitHubRequest('PUT', `repos/${user.login}/${REPO_NAME}/contents/.github/workflows/${WORKFLOW_FILE}`, workflowUpdateData, token);
 
       await logStep('workflow', 'success', 'GitHub Actions workflow created');
 
