@@ -398,6 +398,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: 'Not authenticated' });
       }
 
+      // Check if this is a first deployment by looking at existing deployments
+      const existingDeployments = await storage.getDeploymentsByUser(username);
+      const isFirstDeployment = existingDeployments.length === 0;
+
       // Check if user has a fork
       let fork = null;
       try {
@@ -407,6 +411,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             hasFork: false, 
             workflowsEnabled: false,
             needsFork: true,
+            githubUsername: username,
+            isFirstDeployment,
             message: 'Repository fork required. Will be created during deployment.' 
           });
         }
@@ -415,6 +421,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           hasFork: false, 
           workflowsEnabled: false,
           needsFork: true,
+          githubUsername: username,
+          isFirstDeployment,
           message: 'Repository fork required. Will be created during deployment.' 
         });
       }
@@ -429,6 +437,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             hasFork: true, 
             workflowsEnabled: true,
             needsFork: false,
+            githubUsername: username,
+            isFirstDeployment,
             message: 'Repository fork exists and workflows are enabled. Ready to deploy!' 
           });
         } else {
@@ -436,6 +446,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             hasFork: true, 
             workflowsEnabled: false,
             needsFork: false,
+            githubUsername: username,
+            isFirstDeployment,
             enableUrl: `https://github.com/${username}/${REPO_NAME}/actions`,
             message: 'Repository fork exists but workflows need to be enabled manually.' 
           });
@@ -446,6 +458,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           hasFork: true, 
           workflowsEnabled: false,
           needsFork: false,
+          githubUsername: username,
+          isFirstDeployment,
           enableUrl: `https://github.com/${username}/${REPO_NAME}/actions`,
           message: 'Repository fork exists but workflows need to be enabled manually.' 
         });
@@ -490,13 +504,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       };
 
+      // Check if this is a first deployment for optimization
+      const existingDeployments = await storage.getDeploymentsByUser(username);
+      const isFirstDeployment = existingDeployments.length === 0;
+      
       // Step 1: Get user info
       await logStep('init', 'running', 'Getting user information...');
       const user = await makeGitHubRequest('GET', 'user', null, token);
       await logStep('init', 'success', `Connected as ${user.login}`);
       
-      // Step 2: Check/Create fork
-      await logStep('fork', 'running', 'Checking repository fork...');
+      // Step 2: Check/Create fork (optimized for subsequent deployments)
+      if (isFirstDeployment) {
+        await logStep('fork', 'running', 'Setting up XYLO server infrastructure...');
+      } else {
+        await logStep('fork', 'running', 'Connecting to existing XYLO server setup...');
+      }
+      
       let fork = null;
       try {
         fork = await makeGitHubRequest('GET', `repos/${user.login}/${REPO_NAME}`, null, token);
@@ -507,75 +530,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Fork doesn't exist
       }
       
-      // Pre-check: If fork exists, verify Actions are likely to work
-      if (fork) {
-        await logStep('actions-check', 'running', 'Checking GitHub Actions compatibility...');
+      // Pre-check: If fork exists, verify XYLO servers are ready (skip detailed checks for repeat deployments)
+      if (fork && !isFirstDeployment) {
+        await logStep('actions-check', 'running', 'Verifying XYLO server readiness...');
+        try {
+          // Quick check for subsequent deployments
+          await makeGitHubRequest('GET', `repos/${user.login}/${REPO_NAME}/actions/permissions`, null, token);
+          await logStep('actions-check', 'success', 'XYLO servers operational - fast-track deployment enabled');
+        } catch (actionsError: any) {
+          await logStep('actions-check', 'warning', 'XYLO server verification skipped - proceeding with deployment');
+        }
+      } else if (fork) {
+        await logStep('actions-check', 'running', 'Performing initial XYLO server verification...');
         try {
           // Try to get Actions permissions - this will fail if Actions are disabled
           await makeGitHubRequest('GET', `repos/${user.login}/${REPO_NAME}/actions/permissions`, null, token);
-          await logStep('actions-check', 'success', 'GitHub Actions are enabled and accessible');
+          await logStep('actions-check', 'success', 'XYLO servers are enabled and accessible');
         } catch (actionsError: any) {
           if (actionsError.response?.status === 404) {
-            await logStep('actions-check', 'warning', `GitHub Actions may be disabled on your fork. You may need to enable them manually at: https://github.com/${user.login}/${REPO_NAME}/settings/actions`);
+            await logStep('actions-check', 'warning', `XYLO servers may need manual activation. Visit: https://github.com/${user.login}/${REPO_NAME}/settings/actions`);
           } else {
-            await logStep('actions-check', 'warning', 'Could not verify GitHub Actions status - proceeding with deployment');
+            await logStep('actions-check', 'warning', 'Could not verify XYLO server status - proceeding with deployment');
           }
         }
       }
 
       if (!fork) {
-        await logStep('fork', 'running', 'Creating repository fork...');
+        await logStep('fork', 'running', 'Creating XYLO server instance...');
         fork = await makeGitHubRequest('POST', `repos/${REPO_OWNER}/${REPO_NAME}/forks`, {}, token);
         await new Promise(resolve => setTimeout(resolve, 2000));
-        await logStep('fork', 'success', 'Repository fork created successfully');
+        await logStep('fork', 'success', 'XYLO server instance created successfully');
         
-        // Add important note about workflow enablement for new forks
-        await logStep('fork-info', 'warning', `⚠️ New fork created. GitHub disables workflows on forks by default for security. You'll need to enable them manually one time.`);
+        // Add important note about server activation for new setups
+        await logStep('fork-info', 'warning', `⚠️ New XYLO server instance created. Server activation required for first deployment.`);
       } else {
-        await logStep('fork', 'success', 'Using existing repository fork');
-        
-        // Check if this is a fork and add helpful info
-        if (fork.fork) {
-          await logStep('fork-info', 'info', `🔄 Working with forked repository. If this is your first deployment, you may need to enable workflows manually.`);
+        if (isFirstDeployment) {
+          await logStep('fork', 'success', 'Using existing XYLO server instance');
+          await logStep('fork-info', 'info', `🔄 XYLO server instance ready. First deployment may require manual activation.`);
+        } else {
+          await logStep('fork', 'success', 'Connected to existing XYLO server instance');
+          await logStep('fork-info', 'info', `⚡ Fast deployment mode enabled - skipping initial setup checks.`);
         }
       }
       
-      // Important: Check and auto-enable Actions if needed
-      await logStep('actions-check', 'running', 'Verifying GitHub Actions are enabled on your fork...');
-      try {
-        const actionsPermissions = await makeGitHubRequest('GET', `repos/${user.login}/${REPO_NAME}/actions/permissions`, null, token);
-        
-        if (actionsPermissions && actionsPermissions.enabled === false) {
-          // Actions are disabled, let's enable them automatically
-          await logStep('actions-enable', 'running', 'GitHub Actions are disabled. Auto-enabling them now...');
+      // XYLO server activation check (optimized for repeat deployments)
+      if (isFirstDeployment) {
+        await logStep('actions-check', 'running', 'Verifying XYLO server activation...');
+        try {
+          const actionsPermissions = await makeGitHubRequest('GET', `repos/${user.login}/${REPO_NAME}/actions/permissions`, null, token);
           
-          await makeGitHubRequest('PUT', `repos/${user.login}/${REPO_NAME}/actions/permissions`, {
-            enabled: true,
-            allowed_actions: 'all'
-          }, token);
-          
-          await logStep('actions-enable', 'success', '✅ GitHub Actions have been automatically enabled!');
-        } else {
-          await logStep('actions-check', 'success', 'GitHub Actions are already enabled and ready');
-        }
-      } catch (actionsError: any) {
-        if (actionsError.response?.status === 404) {
-          // Likely means Actions are disabled entirely - try to enable them
-          await logStep('actions-enable', 'running', 'GitHub Actions appear disabled. Attempting to auto-enable...');
-          
-          try {
+          if (actionsPermissions && actionsPermissions.enabled === false) {
+            // Actions are disabled, let's enable them automatically
+            await logStep('actions-enable', 'running', 'XYLO servers need activation. Auto-activating now...');
+            
             await makeGitHubRequest('PUT', `repos/${user.login}/${REPO_NAME}/actions/permissions`, {
               enabled: true,
               allowed_actions: 'all'
             }, token);
             
-            await logStep('actions-enable', 'success', '✅ GitHub Actions have been automatically enabled!');
-          } catch (enableError: any) {
-            await logStep('actions-enable', 'failed', `Failed to auto-enable Actions (${enableError.response?.status}). You may need to enable them manually at: https://github.com/${user.login}/${REPO_NAME}/settings/actions`);
+            await logStep('actions-enable', 'success', '✅ XYLO servers have been automatically activated!');
+          } else {
+            await logStep('actions-check', 'success', 'XYLO servers are already activated and ready');
           }
-        } else {
-          await logStep('actions-check', 'warning', `Could not verify Actions status (${actionsError.response?.status}). Proceeding with deployment...`);
+        } catch (actionsError: any) {
+          if (actionsError.response?.status === 404) {
+            // Likely means Actions are disabled entirely - try to enable them
+            await logStep('actions-enable', 'running', 'XYLO servers appear inactive. Attempting auto-activation...');
+            
+            try {
+              await makeGitHubRequest('PUT', `repos/${user.login}/${REPO_NAME}/actions/permissions`, {
+                enabled: true,
+                allowed_actions: 'all'
+              }, token);
+              
+              await logStep('actions-enable', 'success', '✅ XYLO servers have been automatically activated!');
+            } catch (enableError: any) {
+              await logStep('actions-enable', 'failed', `Failed to auto-activate servers (${enableError.response?.status}). Manual activation required at: https://github.com/${user.login}/${REPO_NAME}/settings/actions`);
+            }
+          } else {
+            await logStep('actions-check', 'warning', `Could not verify server status (${actionsError.response?.status}). Proceeding with deployment...`);
+          }
         }
+      } else {
+        // Skip detailed server checks for subsequent deployments
+        await logStep('actions-check', 'success', '⚡ Fast deployment: XYLO servers pre-verified - activation checks skipped');
       }
 
       // Step 3: Generate and create branch

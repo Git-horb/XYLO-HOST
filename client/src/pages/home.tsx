@@ -394,7 +394,7 @@ export default function Home() {
                               </li>
                               <li className="flex items-center space-x-2">
                                 <CheckCircle className="w-3 h-3 text-green-500 flex-shrink-0" />
-                                <span>Setup GitHub Actions workflow</span>
+                                <span>Setup XYLO server configuration</span>
                               </li>
                               <li className="flex items-center space-x-2">
                                 <CheckCircle className="w-3 h-3 text-green-500 flex-shrink-0" />
@@ -467,7 +467,7 @@ export default function Home() {
                         <div>
                           <h4 className="font-semibold text-slate-900 dark:text-white mb-2">Smart Automation</h4>
                           <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-                            GitHub Actions integration with intelligent restart, continuous deployment, and error recovery
+                            XYLO server integration with intelligent restart, continuous deployment, and error recovery
                           </p>
                         </div>
                       </div>
@@ -612,7 +612,7 @@ export default function Home() {
           </div>
           <div className="mt-8 pt-6 border-t border-slate-700 text-center">
             <p className="text-xs text-slate-500">
-              &copy; 2025 XYLO-MD Platform. Powered by GitHub Actions & Replit Infrastructure.
+              &copy; 2025@DavidXTech integrated with XYLO server
             </p>
           </div>
         </div>
