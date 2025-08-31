@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams, useLocation } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,7 +18,9 @@ import {
   GitBranch,
   Calendar,
   User,
-  Activity
+  Activity,
+  Wifi,
+  WifiOff
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import type { Deployment, DeploymentLog } from '@shared/schema';
@@ -66,6 +68,11 @@ export default function DeploymentDetails() {
   const params = useParams();
   const [, setLocation] = useLocation();
   const deploymentId = params.id;
+  
+  // WebSocket state
+  const [liveLogs, setLiveLogs] = useState<DeploymentLog[]>([]);
+  const [isWebSocketConnected, setIsWebSocketConnected] = useState(false);
+  const wsRef = useRef<WebSocket | null>(null);
 
   // Fetch deployment details
   const { data: deployment, isLoading: deploymentLoading } = useQuery<Deployment>({
@@ -74,12 +81,70 @@ export default function DeploymentDetails() {
     refetchInterval: 5000, // Refetch every 5 seconds
   });
 
-  // Fetch deployment logs
+  // Fetch initial deployment logs (fallback for basic logs)
   const { data: logs, isLoading: logsLoading } = useQuery<DeploymentLog[]>({
     queryKey: ['/api/deployments', deploymentId, 'logs'],
     enabled: !!deploymentId,
-    refetchInterval: 3000, // Refetch every 3 seconds
+    refetchInterval: deployment?.status === 'running' ? 10000 : false, // Slower polling as fallback
   });
+
+  // WebSocket connection for live logs
+  useEffect(() => {
+    if (!deploymentId || !deployment) return;
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}`;
+    
+    try {
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        console.log('WebSocket connected for deployment:', deploymentId);
+        setIsWebSocketConnected(true);
+        
+        // Subscribe to deployment logs
+        ws.send(JSON.stringify({
+          type: 'subscribe',
+          deploymentId: deploymentId
+        }));
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'logs' && data.deploymentId === deploymentId) {
+            console.log('Received live logs:', data.logs);
+            setLiveLogs(data.logs || []);
+          }
+        } catch (error) {
+          console.error('Error parsing WebSocket message:', error);
+        }
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        setIsWebSocketConnected(false);
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        setIsWebSocketConnected(false);
+      };
+    } catch (error) {
+      console.error('Failed to create WebSocket connection:', error);
+      setIsWebSocketConnected(false);
+    }
+
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, [deploymentId, deployment]);
+
+  // Combine basic logs with live logs, prioritizing live logs for running deployments
+  const displayLogs = deployment?.status === 'running' && liveLogs.length > 0 ? liveLogs : logs;
 
   if (deploymentLoading) {
     return (
@@ -205,12 +270,31 @@ export default function DeploymentDetails() {
           <div className="lg:col-span-2 space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Terminal className="w-5 h-5" />
-                  <span>Deployment Logs</span>
-                  {deployment.status === 'running' && (
-                    <RefreshCw className="w-4 h-4 animate-spin text-blue-500" />
-                  )}
+                <CardTitle className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Terminal className="w-5 h-5" />
+                    <span>Deployment Logs</span>
+                    {deployment.status === 'running' && (
+                      <RefreshCw className="w-4 h-4 animate-spin text-blue-500" />
+                    )}
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    {deployment.status === 'running' && (
+                      <div className="flex items-center space-x-1 text-xs">
+                        {isWebSocketConnected ? (
+                          <>
+                            <Wifi className="w-3 h-3 text-green-500" />
+                            <span className="text-green-600">Live</span>
+                          </>
+                        ) : (
+                          <>
+                            <WifiOff className="w-3 h-3 text-orange-500" />
+                            <span className="text-orange-600">Polling</span>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -224,10 +308,10 @@ export default function DeploymentDetails() {
                       </div>
                     ))}
                   </div>
-                ) : logs && logs.length > 0 ? (
+                ) : displayLogs && displayLogs.length > 0 ? (
                   <ScrollArea className="h-96">
                     <div className="space-y-4" data-testid="deployment-logs">
-                      {logs.map((log, index) => (
+                      {displayLogs.map((log, index) => (
                         <div key={log.id} className="flex items-start space-x-3">
                           <div className="flex-shrink-0 mt-1">
                             {getStatusIcon(log.status)}

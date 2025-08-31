@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
+import { WebSocketServer } from "ws";
 import session from "express-session";
 import axios from "axios";
 import { storage } from "./storage";
@@ -27,6 +28,143 @@ export async function registerRoutes(app: Express): Promise<Server> {
       sameSite: 'lax'
     }
   }));
+
+  // Create HTTP server
+  const server = createServer(app);
+  
+  // WebSocket server for live logs
+  const wss = new WebSocketServer({ server });
+  
+  // Store active log streams
+  const activeStreams = new Map<string, Set<any>>();
+
+  // WebSocket connection handler
+  wss.on('connection', (ws, req) => {
+    console.log('WebSocket client connected');
+    
+    ws.on('message', (message) => {
+      try {
+        const data = JSON.parse(message.toString());
+        if (data.type === 'subscribe' && data.deploymentId) {
+          // Subscribe to deployment logs
+          if (!activeStreams.has(data.deploymentId)) {
+            activeStreams.set(data.deploymentId, new Set());
+          }
+          activeStreams.get(data.deploymentId)!.add(ws);
+          console.log(`Client subscribed to deployment: ${data.deploymentId}`);
+          
+          // Start streaming logs for this deployment
+          startLogStreaming(data.deploymentId);
+        }
+      } catch (error) {
+        console.error('Error parsing WebSocket message:', error);
+      }
+    });
+    
+    ws.on('close', () => {
+      // Remove from all active streams
+      activeStreams.forEach((clients, deploymentId) => {
+        clients.delete(ws);
+        if (clients.size === 0) {
+          activeStreams.delete(deploymentId);
+        }
+      });
+      console.log('WebSocket client disconnected');
+    });
+  });
+
+  // Function to fetch GitHub Actions workflow run logs
+  async function fetchWorkflowLogs(deploymentId: string, token: string) {
+    try {
+      const deployment = await storage.getDeployment(deploymentId);
+      if (!deployment || !deployment.workflowUrl) return [];
+
+      // Extract repo and workflow info from workflow URL
+      const repoMatch = deployment.workflowUrl.match(/github\.com\/([^/]+)\/([^/]+)/);
+      if (!repoMatch) return [];
+
+      const [, owner, repo] = repoMatch;
+      
+      // Get workflow runs
+      const runs = await makeGitHubRequest('GET', `repos/${owner}/${repo}/actions/runs?per_page=10`, null, token);
+      if (!runs || !runs.workflow_runs || runs.workflow_runs.length === 0) return [];
+
+      const latestRun = runs.workflow_runs[0];
+      if (!latestRun) return [];
+
+      // Get jobs for the latest run
+      const jobs = await makeGitHubRequest('GET', `repos/${owner}/${repo}/actions/runs/${latestRun.id}/jobs`, null, token);
+      if (!jobs || !jobs.jobs || jobs.jobs.length === 0) return [];
+
+      const logs = [];
+      for (const job of jobs.jobs) {
+        if (job.steps) {
+          for (const step of job.steps) {
+            if (step.conclusion !== null || step.status === 'in_progress') {
+              logs.push({
+                id: `${job.id}-${step.number}`,
+                timestamp: step.started_at || step.created_at,
+                step: step.name,
+                status: step.conclusion || step.status || 'pending',
+                message: `Step: ${step.name}`,
+                runId: latestRun.id,
+                jobId: job.id,
+                stepNumber: step.number
+              });
+            }
+          }
+        }
+      }
+
+      return logs.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    } catch (error) {
+      console.error('Error fetching workflow logs:', error);
+      return [];
+    }
+  }
+
+  // Function to start log streaming for a deployment
+  async function startLogStreaming(deploymentId: string) {
+    const deployment = await storage.getDeployment(deploymentId);
+    if (!deployment || deployment.status !== 'running') return;
+
+    const clients = activeStreams.get(deploymentId);
+    if (!clients || clients.size === 0) return;
+
+    console.log(`Starting log streaming for deployment: ${deploymentId}`);
+
+    // Get user token (this is a simplified approach - in production you'd want better auth handling)
+    const token = process.env.GITHUB_TOKEN || 'your-github-token';
+
+    const streamLogs = async () => {
+      try {
+        const logs = await fetchWorkflowLogs(deploymentId, token);
+        
+        // Broadcast logs to all connected clients for this deployment
+        const message = JSON.stringify({
+          type: 'logs',
+          deploymentId,
+          logs,
+          timestamp: new Date().toISOString()
+        });
+
+        clients.forEach(client => {
+          if (client.readyState === 1) { // WebSocket.OPEN
+            client.send(message);
+          }
+        });
+
+        // Continue streaming if deployment is still running
+        if (deployment.status === 'running' && clients.size > 0) {
+          setTimeout(streamLogs, 5000); // Poll every 5 seconds
+        }
+      } catch (error) {
+        console.error('Error in log streaming:', error);
+      }
+    };
+
+    streamLogs();
+  }
 
   const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID || process.env.VITE_GITHUB_CLIENT_ID;
   const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET || process.env.VITE_GITHUB_CLIENT_SECRET;
@@ -595,6 +733,5 @@ jobs:
     }
   });
 
-  const httpServer = createServer(app);
-  return httpServer;
+  return server;
 }
