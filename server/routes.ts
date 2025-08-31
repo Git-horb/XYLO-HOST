@@ -248,19 +248,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Parse and update the existing config, preserving all other settings
       let updatedConfigContent;
       try {
-        // More aggressive approach to find and replace SESSION_ID
-        if (existingConfigContent.includes('SESSION_ID')) {
-          // Split content into lines for line-by-line processing
+        // Handle ES6 module config that reads SESSION_ID from environment variables
+        if (existingConfigContent.includes('process.env.SESSION_ID')) {
+          // Replace the fallback value in the SESSION_ID getter
+          updatedConfigContent = existingConfigContent.replace(
+            /get SESSION_ID\(\)\s*{\s*return\s+process\.env\.SESSION_ID\s*\|\|\s*['"`][^'"`]*['"`]\s*}/g,
+            `get SESSION_ID() { return process.env.SESSION_ID || '${sessionId}' }`
+          );
+          
+          // Also handle single line format
+          if (updatedConfigContent === existingConfigContent) {
+            updatedConfigContent = existingConfigContent.replace(
+              /(get SESSION_ID\(\)\s*{\s*return\s+process\.env\.SESSION_ID\s*\|\|\s*)['"`][^'"`]*['"`]/g,
+              `$1'${sessionId}'`
+            );
+          }
+        } else if (existingConfigContent.includes('SESSION_ID')) {
+          // Handle other SESSION_ID formats (legacy support)
           const lines = existingConfigContent.split('\n');
           const updatedLines = lines.map(line => {
-            // If this line contains SESSION_ID, replace the entire value part
             if (line.includes('SESSION_ID')) {
-              // Handle different formats on the same line
               if (line.includes(':')) {
-                // Object property format: SESSION_ID: "value"
                 return line.replace(/(\s*SESSION_ID\s*:\s*).*$/, `$1"${sessionId}"`);
               } else if (line.includes('=')) {
-                // Assignment format: SESSION_ID = "value"
                 return line.replace(/(\s*SESSION_ID\s*=\s*).*$/, `$1"${sessionId}"`);
               }
             }
@@ -268,31 +278,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
           updatedConfigContent = updatedLines.join('\n');
         } else {
-          // Add SESSION_ID if it doesn't exist
-          if (existingConfigContent.includes('module.exports')) {
-            updatedConfigContent = existingConfigContent.replace(
-              /module\.exports\s*=\s*{/,
-              `module.exports = {\n  SESSION_ID: "${sessionId}",`
-            );
-          } else {
-            // Simple config format
-            updatedConfigContent = `SESSION_ID = "${sessionId}"\n` + existingConfigContent;
-          }
+          // Add SESSION_ID if it doesn't exist - create .env file instead
+          console.log('SESSION_ID not found in config, will create .env file');
+          updatedConfigContent = existingConfigContent; // Keep config unchanged
         }
         
-        // Ensure content actually changed
-        if (updatedConfigContent === existingConfigContent) {
-          console.log('Content unchanged, forcing SESSION_ID update...');
-          // Force an update by finding any SESSION_ID line and replacing it
+        // Ensure content actually changed for env-based configs
+        if (updatedConfigContent === existingConfigContent && existingConfigContent.includes('process.env.SESSION_ID')) {
+          console.log('Environment-based config detected, forcing fallback value update...');
+          // More aggressive replacement for environment configs
           updatedConfigContent = existingConfigContent.replace(
-            /.*SESSION_ID.*$/m,
-            `  SESSION_ID: "${sessionId}"`
+            /(process\.env\.SESSION_ID\s*\|\|\s*)['"`][^'"`]*['"`]/g,
+            `$1'${sessionId}'`
           );
         }
       } catch (error) {
         console.log('Error in config processing:', error);
-        // Fallback: create new config if parsing fails
-        updatedConfigContent = `module.exports = {\n  SESSION_ID: "${sessionId}"\n};`;
+        updatedConfigContent = existingConfigContent;
       }
 
       console.log('Session ID being written:', sessionId);
@@ -304,6 +306,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
         branch: finalBranchName,
         sha: configSha
       }, token);
+
+      // Also create/update .env file for environment variables
+      try {
+        let envSha;
+        let existingEnvContent = '';
+        
+        try {
+          const envFileData = await makeGitHubRequest('GET', `repos/${user.login}/${REPO_NAME}/contents/.env?ref=${finalBranchName}`, null, token);
+          envSha = envFileData.sha;
+          existingEnvContent = Buffer.from(envFileData.content, 'base64').toString('utf-8');
+        } catch (error) {
+          // .env file doesn't exist, will create new
+          console.log('.env file not found, creating new one');
+        }
+
+        // Update or add SESSION_ID in .env file
+        let updatedEnvContent;
+        if (existingEnvContent.includes('SESSION_ID')) {
+          // Replace existing SESSION_ID in .env
+          updatedEnvContent = existingEnvContent.replace(
+            /SESSION_ID\s*=\s*.*/g,
+            `SESSION_ID=${sessionId}`
+          );
+        } else {
+          // Add SESSION_ID to existing .env content
+          updatedEnvContent = existingEnvContent + (existingEnvContent ? '\n' : '') + `SESSION_ID=${sessionId}`;
+        }
+
+        await makeGitHubRequest('PUT', `repos/${user.login}/${REPO_NAME}/contents/.env`, {
+          message: `Update .env with session ID for ${finalBranchName}`,
+          content: Buffer.from(updatedEnvContent).toString('base64'),
+          branch: finalBranchName,
+          sha: envSha
+        }, token);
+
+        console.log('.env file updated with SESSION_ID');
+      } catch (error) {
+        console.log('Error updating .env file:', error);
+        // Continue even if .env update fails, since we updated the config fallback
+      }
 
       await logStep('config', 'success', 'Configuration file updated with session ID');
 
