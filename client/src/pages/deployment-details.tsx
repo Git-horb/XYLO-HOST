@@ -427,7 +427,7 @@ export default function DeploymentDetails() {
                       </div>
                     </div>
                   </>
-                )
+                )}
               </CardContent>
             </Card>
 
