@@ -343,6 +343,83 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // Workflow verification endpoint
+  app.get('/api/workflows/verify', async (req: Request, res: Response) => {
+    try {
+      const token = req.session.githubToken;
+      const username = req.session.githubUsername;
+
+      if (!token || !username) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+
+      // Check if user has a fork
+      let fork = null;
+      try {
+        fork = await makeGitHubRequest('GET', `repos/${username}/${REPO_NAME}`, null, token);
+        if (!fork.fork || fork.parent.full_name !== `${REPO_OWNER}/${REPO_NAME}`) {
+          return res.json({ 
+            hasFork: false, 
+            workflowsEnabled: false,
+            needsFork: true,
+            message: 'Repository fork required. Will be created during deployment.' 
+          });
+        }
+      } catch (error) {
+        return res.json({ 
+          hasFork: false, 
+          workflowsEnabled: false,
+          needsFork: true,
+          message: 'Repository fork required. Will be created during deployment.' 
+        });
+      }
+
+      // Check if workflows are enabled
+      try {
+        const actionsPermissions = await makeGitHubRequest('GET', `repos/${username}/${REPO_NAME}/actions/permissions`, null, token);
+        
+        if (actionsPermissions && actionsPermissions.enabled !== false) {
+          return res.json({ 
+            hasFork: true, 
+            workflowsEnabled: true,
+            needsFork: false,
+            message: 'Repository fork exists and workflows are enabled. Ready to deploy!' 
+          });
+        } else {
+          return res.json({ 
+            hasFork: true, 
+            workflowsEnabled: false,
+            needsFork: false,
+            enableUrl: `https://github.com/${username}/${REPO_NAME}/actions`,
+            message: 'Repository fork exists but workflows need to be enabled manually.' 
+          });
+        }
+      } catch (actionsError: any) {
+        if (actionsError.response?.status === 404) {
+          // Actions are likely disabled
+          return res.json({ 
+            hasFork: true, 
+            workflowsEnabled: false,
+            needsFork: false,
+            enableUrl: `https://github.com/${username}/${REPO_NAME}/actions`,
+            message: 'Repository fork exists but workflows need to be enabled manually.' 
+          });
+        } else {
+          return res.json({ 
+            hasFork: true, 
+            workflowsEnabled: false,
+            needsFork: false,
+            enableUrl: `https://github.com/${username}/${REPO_NAME}/actions`,
+            message: 'Could not verify workflow status. Please check manually.' 
+          });
+        }
+      }
+    } catch (error: any) {
+      console.error('Workflow verification error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Deploy endpoint with live logging
   app.post('/api/deploy', async (req: Request, res: Response) => {
     let deployment: any = null;

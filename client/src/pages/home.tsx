@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { API_BASE_URL } from '@/lib/config';
 import { Github, Zap, Shield, Heart, BarChart3, CheckCircle, XCircle, Info } from 'lucide-react';
+import { WorkflowVerification } from '@/components/workflow-verification';
 
 interface AuthStatus {
   authenticated: boolean;
@@ -28,6 +29,7 @@ export default function Home() {
   const [sessionId, setSessionId] = useState('');
   const [branchName, setBranchName] = useState('');
   const [showDeployment, setShowDeployment] = useState(false);
+  const [workflowVerified, setWorkflowVerified] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -259,6 +261,13 @@ export default function Home() {
                       </div>
                     </div>
 
+                    {/* Workflow Verification Step */}
+                    <div className="mb-8">
+                      <WorkflowVerification 
+                        onVerificationComplete={setWorkflowVerified}
+                      />
+                    </div>
+
                     <form onSubmit={handleDeploy} className="space-y-6">
                       <div className="space-y-5">
                         <div>
@@ -330,14 +339,19 @@ export default function Home() {
 
                       <Button
                         type="submit"
-                        disabled={deployMutation.isPending}
-                        className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-4 px-6 h-auto shadow-lg transition-all duration-300 hover:scale-[1.02] hover:shadow-xl rounded-xl"
+                        disabled={deployMutation.isPending || !workflowVerified}
+                        className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:from-slate-400 disabled:to-slate-500 text-white font-semibold py-4 px-6 h-auto shadow-lg transition-all duration-300 hover:scale-[1.02] hover:shadow-xl rounded-xl disabled:scale-100 disabled:shadow-md"
                         data-testid="button-deploy"
                       >
                         {deployMutation.isPending ? (
                           <>
                             <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent mr-3"></div>
                             Deploying Your Bot...
+                          </>
+                        ) : !workflowVerified ? (
+                          <>
+                            <XCircle className="w-5 h-5 mr-3" />
+                            Complete Workflow Verification Above
                           </>
                         ) : (
                           <>
