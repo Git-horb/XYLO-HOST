@@ -32,7 +32,7 @@ export function WorkflowVerification({ onVerificationComplete, onSetupRequired }
   // Notify parent component when verification status changes
   useEffect(() => {
     const isVerified = workflowStatus?.workflowsEnabled || isManuallyVerified;
-    const needsSetup = workflowStatus?.needsFork;
+    const needsSetup = workflowStatus?.needsFork || !workflowStatus?.hasFork;
     onVerificationComplete(!!isVerified);
     onSetupRequired(!!needsSetup);
   }, [workflowStatus, isManuallyVerified, onVerificationComplete, onSetupRequired]);

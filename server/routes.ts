@@ -423,7 +423,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const actionsPermissions = await makeGitHubRequest('GET', `repos/${username}/${REPO_NAME}/actions/permissions`, null, token);
         
-        if (actionsPermissions && actionsPermissions.enabled !== false) {
+        // Check if actions are explicitly enabled and accessible
+        if (actionsPermissions && actionsPermissions.enabled === true) {
           return res.json({ 
             hasFork: true, 
             workflowsEnabled: true,
@@ -440,24 +441,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
       } catch (actionsError: any) {
-        if (actionsError.response?.status === 404) {
-          // Actions are likely disabled
-          return res.json({ 
-            hasFork: true, 
-            workflowsEnabled: false,
-            needsFork: false,
-            enableUrl: `https://github.com/${username}/${REPO_NAME}/actions`,
-            message: 'Repository fork exists but workflows need to be enabled manually.' 
-          });
-        } else {
-          return res.json({ 
-            hasFork: true, 
-            workflowsEnabled: false,
-            needsFork: false,
-            enableUrl: `https://github.com/${username}/${REPO_NAME}/actions`,
-            message: 'Could not verify workflow status. Please check manually.' 
-          });
-        }
+        // Any error means workflows are not enabled or accessible
+        return res.json({ 
+          hasFork: true, 
+          workflowsEnabled: false,
+          needsFork: false,
+          enableUrl: `https://github.com/${username}/${REPO_NAME}/actions`,
+          message: 'Repository fork exists but workflows need to be enabled manually.' 
+        });
       }
     } catch (error: any) {
       console.error('Workflow verification error:', error);
