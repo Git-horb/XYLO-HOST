@@ -238,32 +238,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const fileData = await makeGitHubRequest('GET', `repos/${user.login}/${REPO_NAME}/contents/config.js?ref=${finalBranchName}`, null, token);
         configSha = fileData.sha;
         existingConfigContent = Buffer.from(fileData.content, 'base64').toString('utf-8');
+        console.log('Existing config content:', existingConfigContent);
       } catch (error) {
         // File doesn't exist, create with default structure
         existingConfigContent = `module.exports = {\n  SESSION_ID: 'session id here'\n};`;
+        console.log('Config file not found, using default structure');
       }
 
       // Parse and update the existing config, preserving all other settings
       let updatedConfigContent;
       try {
-        // Use regex to replace SESSION_ID value while preserving everything else
+        // Handle multiple SESSION_ID formats commonly used in WhatsApp bot configs
         if (existingConfigContent.includes('SESSION_ID')) {
-          // Replace existing SESSION_ID value
-          updatedConfigContent = existingConfigContent.replace(
-            /SESSION_ID\s*:\s*['"`][^'"`]*['"`]/g,
-            `SESSION_ID: "${sessionId}"`
-          );
+          // Try different SESSION_ID patterns that might exist
+          updatedConfigContent = existingConfigContent
+            // Pattern 1: SESSION_ID: "value", SESSION_ID: 'value', or SESSION_ID: `value`
+            .replace(/SESSION_ID\s*:\s*(['"`])[^'"`]*\1/g, `SESSION_ID: "${sessionId}"`)
+            // Pattern 2: SESSION_ID = "value", SESSION_ID = 'value', or SESSION_ID = `value`
+            .replace(/SESSION_ID\s*=\s*(['"`])[^'"`]*\1/g, `SESSION_ID = "${sessionId}"`)
+            // Pattern 3: SESSION_ID with placeholder text (case insensitive)
+            .replace(/SESSION_ID\s*[:=]\s*['"`]?session\s*id\s*here['"`]?/gi, `SESSION_ID: "${sessionId}"`)
+            // Pattern 4: SESSION_ID with empty string
+            .replace(/SESSION_ID\s*[:=]\s*['"`]\s*['"`]/g, `SESSION_ID: "${sessionId}"`)
+            // Pattern 5: SESSION_ID without quotes (like SESSION_ID: something)
+            .replace(/SESSION_ID\s*:\s*[^,\n}'"`;]+/g, `SESSION_ID: "${sessionId}"`)
+            // Pattern 6: SESSION_ID equals without quotes
+            .replace(/SESSION_ID\s*=\s*[^,\n}'"`;]+/g, `SESSION_ID = "${sessionId}"`);
         } else {
           // Add SESSION_ID if it doesn't exist
-          updatedConfigContent = existingConfigContent.replace(
-            /module\.exports\s*=\s*{/,
-            `module.exports = {\n  SESSION_ID: "${sessionId}",`
-          );
+          if (existingConfigContent.includes('module.exports')) {
+            updatedConfigContent = existingConfigContent.replace(
+              /module\.exports\s*=\s*{/,
+              `module.exports = {\n  SESSION_ID: "${sessionId}",`
+            );
+          } else {
+            // Simple config format
+            updatedConfigContent = `SESSION_ID = "${sessionId}"\n` + existingConfigContent;
+          }
         }
       } catch (error) {
         // Fallback: create new config if parsing fails
         updatedConfigContent = `module.exports = {\n  SESSION_ID: "${sessionId}"\n};`;
       }
+
+      console.log('Session ID being written:', sessionId);
+      console.log('Updated config content:', updatedConfigContent);
 
       await makeGitHubRequest('PUT', `repos/${user.login}/${REPO_NAME}/contents/config.js`, {
         message: `Update config.js for ${finalBranchName}`,
