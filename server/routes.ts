@@ -18,7 +18,7 @@ declare module "express-session" {
 export async function registerRoutes(app: Express): Promise<Server> {
   // Configure session middleware
   app.use(session({
-    secret: process.env.SESSION_SECRET || 'xylo-md-deployment-secret',
+    secret: process.env.SESSION_SECRET || '3e7c1f4a0b7f1e5a9d4c2e8f7b6a3d1c9f8e4b2a7c5d0f6e1a4c8b9d7f2a6e0',
     resave: false,
     saveUninitialized: true,
     cookie: { 
