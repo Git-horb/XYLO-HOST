@@ -232,16 +232,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Step 4: Update config file
       await logStep('config', 'running', 'Updating configuration file...');
       let configSha;
+      let existingConfigContent = '';
+      
       try {
         const fileData = await makeGitHubRequest('GET', `repos/${user.login}/${REPO_NAME}/contents/config.js?ref=${finalBranchName}`, null, token);
         configSha = fileData.sha;
+        existingConfigContent = Buffer.from(fileData.content, 'base64').toString('utf-8');
       } catch (error) {
-        // File doesn't exist, will create new
+        // File doesn't exist, create with default structure
+        existingConfigContent = `module.exports = {\n  SESSION_ID: 'session id here'\n};`;
+      }
+
+      // Parse and update the existing config, preserving all other settings
+      let updatedConfigContent;
+      try {
+        // Use regex to replace SESSION_ID value while preserving everything else
+        if (existingConfigContent.includes('SESSION_ID')) {
+          // Replace existing SESSION_ID value
+          updatedConfigContent = existingConfigContent.replace(
+            /SESSION_ID\s*:\s*['"`][^'"`]*['"`]/g,
+            `SESSION_ID: "${sessionId}"`
+          );
+        } else {
+          // Add SESSION_ID if it doesn't exist
+          updatedConfigContent = existingConfigContent.replace(
+            /module\.exports\s*=\s*{/,
+            `module.exports = {\n  SESSION_ID: "${sessionId}",`
+          );
+        }
+      } catch (error) {
+        // Fallback: create new config if parsing fails
+        updatedConfigContent = `module.exports = {\n  SESSION_ID: "${sessionId}"\n};`;
       }
 
       await makeGitHubRequest('PUT', `repos/${user.login}/${REPO_NAME}/contents/config.js`, {
         message: `Update config.js for ${finalBranchName}`,
-        content: Buffer.from(`module.exports = { SESSION_ID: "${sessionId}" };`).toString('base64'),
+        content: Buffer.from(updatedConfigContent).toString('base64'),
         branch: finalBranchName,
         sha: configSha
       }, token);
