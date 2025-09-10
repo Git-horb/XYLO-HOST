@@ -216,7 +216,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Get callback URL dynamically
   const getCallbackUrl = (req: Request) => {
-    const protocol = req.headers['x-forwarded-proto'] || 'http';
+    const protocol = req.headers['x-forwarded-proto'] || 'https';
     const host = req.headers.host;
     return `${protocol}://${host}/api/auth/callback`;
   };
